@@ -3,17 +3,19 @@
 Coordinates schema discovery, tool-calling loop, query execution with AST safety,
 numeric anti-hallucination verification, and chart visualization recommendation.
 """
+
 import json
 import time
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.ai.guardrails.grounding import GroundingGuardrail, GroundingResult
 from app.ai.prompts import SYSTEM_PROMPT
-from app.ai.providers.base import BaseLLMProvider, LLMMessage, ToolCall
+from app.ai.providers.base import BaseLLMProvider, LLMMessage
 from app.ai.providers.factory import get_llm_provider
 from app.ai.tools import (
     AI_TOOLS_SPEC,
@@ -25,11 +27,11 @@ from app.db.models import AIConversation, AIMessage, AIToolCall, Dataset, User
 
 
 def recommend_chart_for_results(
-    columns: List[str],
-    column_types: List[str],
-    rows: List[List[Any]],
+    columns: list[str],
+    column_types: list[str],
+    rows: list[list[Any]],
     row_count: int,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Determine the optimal visual chart configuration based on result schema."""
     if not columns or not rows:
         return {"viz_type": "table", "options": {}}
@@ -39,14 +41,23 @@ def recommend_chart_for_results(
         return {
             "viz_type": "big_number",
             "metric": columns[0],
-            "options": {"prefix": "$" if "revenue" in columns[0].lower() or "profit" in columns[0].lower() else ""},
+            "options": {
+                "prefix": "$"
+                if "revenue" in columns[0].lower() or "profit" in columns[0].lower()
+                else ""
+            },
         }
 
     # Two columns: dimension and metric
     if len(columns) == 2:
         col1_lower = columns[0].lower()
         # Time progression
-        if "date" in col1_lower or "time" in col1_lower or "month" in col1_lower or "year" in col1_lower:
+        if (
+            "date" in col1_lower
+            or "time" in col1_lower
+            or "month" in col1_lower
+            or "year" in col1_lower
+        ):
             return {
                 "viz_type": "line",
                 "time_column": columns[0],
@@ -89,7 +100,7 @@ def recommend_chart_for_results(
 class AIOrchestrator:
     """Agentic Orchestrator managing end-to-end grounded query execution."""
 
-    def __init__(self, provider: Optional[BaseLLMProvider] = None):
+    def __init__(self, provider: BaseLLMProvider | None = None):
         self.provider = provider or get_llm_provider()
 
     async def run(
@@ -97,18 +108,22 @@ class AIOrchestrator:
         session: AsyncSession,
         user: User,
         prompt: str,
-        conversation_id: Optional[uuid.UUID] = None,
-        dataset_id: Optional[uuid.UUID] = None,
-        database_id: Optional[uuid.UUID] = None,
+        conversation_id: uuid.UUID | None = None,
+        dataset_id: uuid.UUID | None = None,
+        database_id: uuid.UUID | None = None,
         max_turns: int = 5,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Execute agentic conversational turn with grounded SQL execution."""
         start_time = time.time()
 
         # 1. Fetch or create conversation
         if conversation_id:
             try:
-                conv_uuid = conversation_id if isinstance(conversation_id, uuid.UUID) else uuid.UUID(str(conversation_id))
+                conv_uuid = (
+                    conversation_id
+                    if isinstance(conversation_id, uuid.UUID)
+                    else uuid.UUID(str(conversation_id))
+                )
             except ValueError:
                 conv_uuid = None
         else:
@@ -135,7 +150,7 @@ class AIOrchestrator:
             await session.flush()
 
         # Load prior conversation history before appending the new user turn
-        history_messages: List[LLMMessage] = []
+        history_messages: list[LLMMessage] = []
         hist_res = await session.execute(
             select(AIMessage)
             .where(AIMessage.conversation_id == conversation.id, AIMessage.deleted_at.is_(None))
@@ -174,17 +189,17 @@ class AIOrchestrator:
                 )
 
         # 4. Initialize message context for LLM (system + prior turns + current prompt)
-        messages: List[LLMMessage] = (
+        messages: list[LLMMessage] = (
             [LLMMessage(role="system", content=SYSTEM_PROMPT + context_hint)]
             + history_messages
             + [LLMMessage(role="user", content=prompt)]
         )
 
         # Execution tracking
-        steps: List[Dict[str, Any]] = []
-        executed_query_data: Optional[Dict[str, Any]] = None
-        all_query_rows: List[List[Any]] = []
-        all_query_columns: List[str] = []
+        steps: list[dict[str, Any]] = []
+        executed_query_data: dict[str, Any] | None = None
+        all_query_rows: list[list[Any]] = []
+        all_query_columns: list[str] = []
 
         turn_count = 0
         final_answer = ""
@@ -209,7 +224,7 @@ class AIOrchestrator:
                 }
 
                 tool_start = time.time()
-                tool_output: Dict[str, Any] = {}
+                tool_output: dict[str, Any] = {}
                 success = True
 
                 if tc.name == "list_datasets_and_tables":
@@ -314,7 +329,9 @@ class AIOrchestrator:
             "answer": final_answer,
             "sql": executed_query_data.get("sql") if executed_query_data else None,
             "columns": executed_query_data.get("columns", []) if executed_query_data else [],
-            "column_types": executed_query_data.get("column_types", []) if executed_query_data else [],
+            "column_types": executed_query_data.get("column_types", [])
+            if executed_query_data
+            else [],
             "rows": executed_query_data.get("rows", []) if executed_query_data else [],
             "row_count": executed_query_data.get("row_count", 0) if executed_query_data else 0,
             "duration_ms": executed_query_data.get("duration_ms", 0) if executed_query_data else 0,
@@ -323,4 +340,3 @@ class AIOrchestrator:
             "steps": steps,
             "latency_ms": total_latency_ms,
         }
-

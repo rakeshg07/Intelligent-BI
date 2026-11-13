@@ -1,6 +1,7 @@
 """Anthropic Claude LLM Provider using direct HTTP API."""
-import json
-from typing import Any, Dict, List, Optional
+
+from typing import Any
+
 import httpx
 
 from app.ai.providers.base import BaseLLMProvider, LLMMessage, LLMResponse, ToolCall
@@ -10,17 +11,25 @@ from app.core.errors import AppException
 class ClaudeProvider(BaseLLMProvider):
     """Anthropic Claude Provider with native tool calling."""
 
-    def __init__(self, model: str = "claude-3-5-sonnet-20241022", api_key: str = "", base_url: str = ""):
-        super().__init__(model=model, api_key=api_key, base_url=base_url or "https://api.anthropic.com/v1/messages")
+    def __init__(
+        self, model: str = "claude-3-5-sonnet-20241022", api_key: str = "", base_url: str = ""
+    ):
+        super().__init__(
+            model=model,
+            api_key=api_key,
+            base_url=base_url or "https://api.anthropic.com/v1/messages",
+        )
 
     async def generate(
         self,
-        messages: List[LLMMessage],
-        tools: Optional[List[Dict[str, Any]]] = None,
+        messages: list[LLMMessage],
+        tools: list[dict[str, Any]] | None = None,
         temperature: float = 0.0,
     ) -> LLMResponse:
         if not self.api_key:
-            raise AppException("Anthropic API key is not configured. Set ANTHROPIC_API_KEY in settings or environment.")
+            raise AppException(
+                "Anthropic API key is not configured. Set ANTHROPIC_API_KEY in settings or environment."
+            )
 
         headers = {
             "x-api-key": self.api_key,
@@ -30,33 +39,37 @@ class ClaudeProvider(BaseLLMProvider):
 
         # Extract system prompt if present
         system_content = ""
-        claude_messages: List[Dict[str, Any]] = []
+        claude_messages: list[dict[str, Any]] = []
 
         for m in messages:
             if m.role == "system":
                 system_content = m.content or ""
             elif m.role == "tool":
-                claude_messages.append({
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": m.tool_call_id,
-                            "content": m.content,
-                        }
-                    ],
-                })
+                claude_messages.append(
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": m.tool_call_id,
+                                "content": m.content,
+                            }
+                        ],
+                    }
+                )
             elif m.role == "assistant" and m.tool_calls:
-                content_blocks: List[Dict[str, Any]] = []
+                content_blocks: list[dict[str, Any]] = []
                 if m.content:
                     content_blocks.append({"type": "text", "text": m.content})
                 for tc in m.tool_calls:
-                    content_blocks.append({
-                        "type": "tool_use",
-                        "id": tc.id,
-                        "name": tc.name,
-                        "input": tc.arguments,
-                    })
+                    content_blocks.append(
+                        {
+                            "type": "tool_use",
+                            "id": tc.id,
+                            "name": tc.name,
+                            "input": tc.arguments,
+                        }
+                    )
                 claude_messages.append({"role": "assistant", "content": content_blocks})
             else:
                 claude_messages.append({"role": m.role, "content": m.content or ""})
@@ -66,13 +79,15 @@ class ClaudeProvider(BaseLLMProvider):
         if tools:
             for t in tools:
                 fn = t.get("function", t)
-                claude_tools.append({
-                    "name": fn["name"],
-                    "description": fn.get("description", ""),
-                    "input_schema": fn.get("parameters", {"type": "object", "properties": {}}),
-                })
+                claude_tools.append(
+                    {
+                        "name": fn["name"],
+                        "description": fn.get("description", ""),
+                        "input_schema": fn.get("parameters", {"type": "object", "properties": {}}),
+                    }
+                )
 
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "model": self.model,
             "max_tokens": 4096,
             "temperature": temperature,
@@ -90,8 +105,8 @@ class ClaudeProvider(BaseLLMProvider):
             data = resp.json()
 
         # Parse response blocks
-        text_parts: List[str] = []
-        tool_calls: List[ToolCall] = []
+        text_parts: list[str] = []
+        tool_calls: list[ToolCall] = []
 
         for block in data.get("content", []):
             if block.get("type") == "text":
@@ -115,4 +130,3 @@ class ClaudeProvider(BaseLLMProvider):
             provider="anthropic",
             model=self.model,
         )
-

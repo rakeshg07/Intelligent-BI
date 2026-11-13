@@ -1,6 +1,8 @@
 """Ollama Local LLM Provider using direct HTTP API."""
+
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 import httpx
 
 from app.ai.providers.base import BaseLLMProvider, LLMMessage, LLMResponse, ToolCall
@@ -15,18 +17,18 @@ class OllamaProvider(BaseLLMProvider):
 
     async def generate(
         self,
-        messages: List[LLMMessage],
-        tools: Optional[List[Dict[str, Any]]] = None,
+        messages: list[LLMMessage],
+        tools: list[dict[str, Any]] | None = None,
         temperature: float = 0.0,
     ) -> LLMResponse:
         url = f"{self.base_url}/api/chat"
 
-        ollama_messages: List[Dict[str, Any]] = []
+        ollama_messages: list[dict[str, Any]] = []
         for m in messages:
-            msg_dict: Dict[str, Any] = {"role": m.role, "content": m.content or ""}
+            msg_dict: dict[str, Any] = {"role": m.role, "content": m.content or ""}
             ollama_messages.append(msg_dict)
 
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "model": self.model,
             "messages": ollama_messages,
             "stream": False,
@@ -41,11 +43,13 @@ class OllamaProvider(BaseLLMProvider):
                 if resp.status_code != 200:
                     raise AppException(f"Ollama error ({resp.status_code}): {resp.text}")
                 data = resp.json()
-            except httpx.ConnectError:
-                raise AppException(f"Could not connect to Ollama at {self.base_url}. Ensure Ollama is running.")
+            except httpx.ConnectError as e:
+                raise AppException(
+                    f"Could not connect to Ollama at {self.base_url}. Ensure Ollama is running."
+                ) from e
 
         msg = data.get("message", {})
-        tool_calls: List[ToolCall] = []
+        tool_calls: list[ToolCall] = []
         for tc in msg.get("tool_calls", []):
             fn = tc.get("function", {})
             args = fn.get("arguments", {})
@@ -69,4 +73,3 @@ class OllamaProvider(BaseLLMProvider):
             provider="ollama",
             model=self.model,
         )
-

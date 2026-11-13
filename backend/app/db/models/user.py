@@ -1,7 +1,8 @@
 """User, Role, and Permission Models."""
+
 import uuid
-from typing import List, Optional
-from sqlalchemy import Boolean, ForeignKey, String, Text, Uuid
+
+from sqlalchemy import Boolean, ForeignKey, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, BaseModel
@@ -9,6 +10,7 @@ from app.db.base import Base, BaseModel
 
 class UserRole(Base):
     """Association table linking users and roles."""
+
     __tablename__ = "user_roles"
 
     user_id: Mapped[uuid.UUID] = mapped_column(
@@ -25,6 +27,7 @@ class UserRole(Base):
 
 class RolePermission(Base):
     """Association table linking roles and permissions."""
+
     __tablename__ = "role_permissions"
 
     role_id: Mapped[uuid.UUID] = mapped_column(
@@ -41,14 +44,15 @@ class RolePermission(Base):
 
 class Permission(BaseModel):
     """System granular permission."""
+
     __tablename__ = "permissions"
 
     code: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    description: Mapped[str | None] = mapped_column(String(255), nullable=True)
     resource: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
 
-    roles: Mapped[List["Role"]] = relationship(
+    roles: Mapped[list["Role"]] = relationship(
         "Role",
         secondary="role_permissions",
         back_populates="permissions",
@@ -57,18 +61,19 @@ class Permission(BaseModel):
 
 class Role(BaseModel):
     """Role-Based Access Control Role."""
+
     __tablename__ = "roles"
 
     name: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    description: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_system: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
-    users: Mapped[List["User"]] = relationship(
+    users: Mapped[list["User"]] = relationship(
         "User",
         secondary="user_roles",
         back_populates="roles",
     )
-    permissions: Mapped[List["Permission"]] = relationship(
+    permissions: Mapped[list["Permission"]] = relationship(
         "Permission",
         secondary="role_permissions",
         back_populates="roles",
@@ -78,6 +83,7 @@ class Role(BaseModel):
 
 class User(BaseModel):
     """Platform user account."""
+
     __tablename__ = "users"
 
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
@@ -86,10 +92,9 @@ class User(BaseModel):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_superuser: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
-    roles: Mapped[List["Role"]] = relationship(
+    roles: Mapped[list["Role"]] = relationship(
         "Role",
         secondary="user_roles",
         back_populates="users",
         lazy="selectin",
     )
-

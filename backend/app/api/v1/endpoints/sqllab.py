@@ -1,7 +1,9 @@
 """SQL Lab Execution and Saved Queries Router."""
+
 import time
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -20,16 +22,16 @@ router = APIRouter(prefix="/sqllab", tags=["SQL Lab"])
 class SQLExecuteRequest(BaseModel):
     database_id: uuid.UUID
     sql: str = Field(..., min_length=1)
-    schema_name: Optional[str] = "main"
-    parameters: Dict[str, Any] = {}
+    schema_name: str | None = "main"
+    parameters: dict[str, Any] = {}
     row_limit: int = 1000
 
 
 class SavedQueryCreate(BaseModel):
     database_id: uuid.UUID
     title: str = Field(..., min_length=1, max_length=200)
-    description: Optional[str] = None
-    schema_name: Optional[str] = "main"
+    description: str | None = None
+    schema_name: str | None = "main"
     sql: str = Field(..., min_length=1)
 
 
@@ -38,7 +40,7 @@ async def execute_sql(
     payload: SQLExecuteRequest,
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_permission("sqllab:use")),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Validate and execute a SQL query in SQL Lab with limits, timeouts, and history logging."""
     conn_stmt = select(DatabaseConnection).where(
         DatabaseConnection.id == payload.database_id,
@@ -115,7 +117,7 @@ async def execute_sql(
 async def get_query_history(
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_permission("sqllab:use")),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Retrieve execution history for SQL Lab."""
     stmt = (
         select(QueryHistory)
@@ -147,7 +149,7 @@ async def get_query_history(
 async def list_saved_queries(
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_permission("sqllab:use")),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """List saved queries for the current user."""
     stmt = (
         select(SavedQuery)
@@ -178,7 +180,7 @@ async def create_saved_query(
     payload: SavedQueryCreate,
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_permission("sqllab:use")),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Save a query in SQL Lab."""
     saved = SavedQuery(
         user_id=current_user.id,
@@ -199,7 +201,7 @@ async def delete_saved_query(
     id: uuid.UUID,
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_permission("sqllab:use")),
-) -> Dict[str, str]:
+) -> dict[str, str]:
     """Delete a saved query."""
     stmt = select(SavedQuery).where(
         SavedQuery.id == id,

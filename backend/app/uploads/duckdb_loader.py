@@ -1,16 +1,17 @@
 """DuckDB File Loader and Automatic Dataset Registrar."""
+
 import io
 import os
-from typing import Dict, List, Optional
+
 import duckdb
 import pandas as pd
 from sqlalchemy import delete, select
-from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.connectors.duckdb_connector import duckdb_write_lock
 from app.core.config import settings
-from app.core.errors import ConflictError, AppException
+from app.core.errors import AppException, ConflictError
 from app.db.models import DatabaseConnection, Dataset, DatasetColumn, UploadedFile, User
 from app.uploads.dashboard_generator import generate_dashboard_for_dataset
 from app.uploads.parser import sanitize_column_name
@@ -22,7 +23,7 @@ async def load_file_into_duckdb_and_register_dataset(
     filename: str,
     table_name: str,
     user: User,
-    column_type_overrides: Optional[Dict[str, str]] = None,
+    column_type_overrides: dict[str, str] | None = None,
     conflict_mode: str = "replace",  # 'fail', 'replace', 'append'
 ) -> Dataset:
     """Ingest tabular file into DuckDB under write lock and auto-register Dataset."""
@@ -55,7 +56,7 @@ async def load_file_into_duckdb_and_register_dataset(
         else:
             raise AppException(f"Unsupported format '.{ext}'")
     except Exception as e:
-        raise AppException(f"Failed to parse upload data: {str(e)}")
+        raise AppException(f"Failed to parse upload data: {str(e)}") from e
 
     # Sanitize dataframe column names
     df.columns = [sanitize_column_name(c) for c in df.columns]
@@ -88,7 +89,7 @@ async def load_file_into_duckdb_and_register_dataset(
             # Check existing table
             check_res = write_conn.execute(
                 "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = ?",
-                [table_identifier]
+                [table_identifier],
             ).fetchall()
             table_exists = bool(check_res and check_res[0][0] > 0)
 
@@ -98,13 +99,17 @@ async def load_file_into_duckdb_and_register_dataset(
                 elif conflict_mode == "append":
                     write_conn.execute(f"INSERT INTO {table_identifier} SELECT * FROM df")
                 else:  # replace
-                    write_conn.execute(f"CREATE OR REPLACE TABLE {table_identifier} AS SELECT * FROM df")
+                    write_conn.execute(
+                        f"CREATE OR REPLACE TABLE {table_identifier} AS SELECT * FROM df"
+                    )
             else:
                 write_conn.execute(f"CREATE TABLE {table_identifier} AS SELECT * FROM df")
 
             # Inspect actual columns in DuckDB
             cols_info = write_conn.execute(f"PRAGMA table_info('{table_identifier}')").fetchall()
-            row_count_res = write_conn.execute(f"SELECT COUNT(*) FROM {table_identifier}").fetchall()
+            row_count_res = write_conn.execute(
+                f"SELECT COUNT(*) FROM {table_identifier}"
+            ).fetchall()
             total_rows = row_count_res[0][0] if row_count_res else len(df)
         finally:
             write_conn.close()
@@ -163,7 +168,7 @@ async def load_file_into_duckdb_and_register_dataset(
             await session.flush()
 
     # Add DatasetColumn records
-    created_cols: List[DatasetColumn] = []
+    created_cols: list[DatasetColumn] = []
     for col_row in cols_info:
         col_name = str(col_row[1])
         col_type = str(col_row[2]).upper()
@@ -174,7 +179,9 @@ async def load_file_into_duckdb_and_register_dataset(
             verbose_name=col_name.replace("_", " ").title(),
             data_type=col_type,
             is_datetime=is_dt,
-            is_dimension=not any(t in col_type for t in ("INT", "DOUBLE", "FLOAT", "DECIMAL", "NUMERIC")),
+            is_dimension=not any(
+                t in col_type for t in ("INT", "DOUBLE", "FLOAT", "DECIMAL", "NUMERIC")
+            ),
             is_filterable=True,
             is_groupable=True,
             is_hidden_from_ai=False,

@@ -2,8 +2,10 @@
 
 Standard tool interfaces and implementations for schema inspection and safe SQL execution.
 """
-from typing import Any, Dict, List, Optional
+
 import uuid
+from typing import Any
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -12,8 +14,7 @@ from app.ai.guardrails.sql_guard import AISQLGuard
 from app.connectors.duckdb_connector import DuckDBConnector
 from app.connectors.factory import get_connector
 from app.core.config import settings
-from app.db.models import DatabaseConnection, Dataset, DatasetColumn, DatasetMetric, User
-
+from app.db.models import DatabaseConnection, Dataset, User
 
 # Tool definitions in standard JSON Schema format compatible with OpenAI and Claude
 AI_TOOLS_SPEC = [
@@ -82,8 +83,8 @@ AI_TOOLS_SPEC = [
 async def tool_list_datasets_and_tables(
     session: AsyncSession,
     user: User,
-    search: Optional[str] = None,
-) -> Dict[str, Any]:
+    search: str | None = None,
+) -> dict[str, Any]:
     """Execute list_datasets_and_tables tool."""
     stmt = (
         select(Dataset)
@@ -95,17 +96,23 @@ async def tool_list_datasets_and_tables(
 
     items = []
     for d in datasets:
-        if search and search.lower() not in d.name.lower() and search.lower() not in (d.table_name or "").lower():
+        if (
+            search
+            and search.lower() not in d.name.lower()
+            and search.lower() not in (d.table_name or "").lower()
+        ):
             continue
-        items.append({
-            "dataset_id": str(d.id),
-            "name": d.name,
-            "table_name": d.table_name,
-            "description": d.description,
-            "is_virtual": d.is_virtual,
-            "columns": [c.name for c in d.columns if not c.is_hidden_from_ai],
-            "metrics": [{"name": m.name, "expression": m.sql_expression} for m in d.metrics],
-        })
+        items.append(
+            {
+                "dataset_id": str(d.id),
+                "name": d.name,
+                "table_name": d.table_name,
+                "description": d.description,
+                "is_virtual": d.is_virtual,
+                "columns": [c.name for c in d.columns if not c.is_hidden_from_ai],
+                "metrics": [{"name": m.name, "expression": m.sql_expression} for m in d.metrics],
+            }
+        )
 
     # Also check duckdb tables
     duckdb_connector = DuckDBConnector()
@@ -121,8 +128,8 @@ async def tool_list_datasets_and_tables(
 async def tool_get_table_schema(
     session: AsyncSession,
     table_name: str,
-    dataset_id: Optional[str] = None,
-) -> Dict[str, Any]:
+    dataset_id: str | None = None,
+) -> dict[str, Any]:
     """Execute get_table_schema tool."""
     # 1. First check if a registered Dataset exists for this table
     stmt = (
@@ -155,7 +162,10 @@ async def tool_get_table_schema(
                     "name": c.name,
                     "type": c.data_type,
                     "is_datetime": c.is_datetime,
-                    "is_numeric": any(t in (c.data_type or "").upper() for t in ("INT", "DOUBLE", "FLOAT", "DECIMAL", "NUMERIC")),
+                    "is_numeric": any(
+                        t in (c.data_type or "").upper()
+                        for t in ("INT", "DOUBLE", "FLOAT", "DECIMAL", "NUMERIC")
+                    ),
                     "description": c.description,
                 }
                 for c in dataset.columns
@@ -181,7 +191,9 @@ async def tool_get_table_schema(
             "found": True,
             "source_type": "physical_table",
             "table_name": table_name,
-            "columns": [{"name": c.name, "type": c.data_type, "nullable": c.nullable} for c in cols],
+            "columns": [
+                {"name": c.name, "type": c.data_type, "nullable": c.nullable} for c in cols
+            ],
             "predefined_metrics": [],
         }
     except Exception as e:
@@ -194,9 +206,9 @@ async def tool_get_table_schema(
 async def tool_execute_sql_query(
     session: AsyncSession,
     sql: str,
-    database_id: Optional[str] = None,
+    database_id: str | None = None,
     max_rows: int = 500,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Execute execute_sql_query tool with full AST security guardrails."""
     # 1. Enforce AST security constraints
     try:
@@ -254,4 +266,3 @@ async def tool_execute_sql_query(
             "sql": validated_sql,
             "error": f"Execution Error: {str(e)}",
         }
-

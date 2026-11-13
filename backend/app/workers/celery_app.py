@@ -1,7 +1,10 @@
 """Celery Worker Application Setup."""
-from typing import Any, Optional
+
+from typing import Any
+
 try:
     from celery import Celery
+
     HAS_CELERY = True
 except ImportError:
     Celery = None
@@ -9,7 +12,7 @@ except ImportError:
 
 from app.core.config import settings
 
-celery_app: Optional[Any] = None
+celery_app: Any | None = None
 
 if HAS_CELERY and Celery is not None:
     celery_app = Celery(
@@ -32,4 +35,3 @@ if HAS_CELERY and Celery is not None:
     def health_check_task() -> dict[str, str]:
         """Simple ping task to verify worker health."""
         return {"status": "worker_online"}
-

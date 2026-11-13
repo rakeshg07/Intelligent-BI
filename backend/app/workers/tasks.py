@@ -1,8 +1,9 @@
 """Celery Async Tasks for Long Queries, Large Uploads, and Export (Phase 5)."""
-import time
-from typing import Any, Dict, List
+
+from typing import Any
+
 from app.connectors.duckdb_connector import DuckDBConnector
-from app.workers.celery_app import celery_app, HAS_CELERY
+from app.workers.celery_app import HAS_CELERY, celery_app
 
 if HAS_CELERY and celery_app:
 
@@ -12,7 +13,7 @@ if HAS_CELERY and celery_app:
         sql: str,
         limit: int = 10000,
         timeout_seconds: int = 120,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Execute a long-running analytical query asynchronously in a Celery worker."""
         connector = DuckDBConnector()
         query_res = connector.execute_query(sql, limit=limit, timeout_seconds=timeout_seconds)
@@ -31,7 +32,7 @@ if HAS_CELERY and celery_app:
         self: Any,
         sql: str,
         filename: str = "export.csv",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate a CSV export file asynchronously."""
         connector = DuckDBConnector()
         query_res = connector.execute_query(sql, limit=50000)

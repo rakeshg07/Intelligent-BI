@@ -1,5 +1,5 @@
 """Connector Factory for Instantiating Database Connectors."""
-from typing import Optional
+
 from app.connectors.base import BaseConnector
 from app.connectors.duckdb_connector import DuckDBConnector
 from app.connectors.sql_connector import SQLAlchemyConnector
@@ -45,4 +45,3 @@ def get_connector(conn: DatabaseConnection) -> BaseConnector:
         uri=uri,
         statement_timeout_seconds=conn.statement_timeout_seconds or 30,
     )
-

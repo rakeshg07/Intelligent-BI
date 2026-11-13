@@ -1,8 +1,11 @@
 """File Parsing, Column Sanitization, and Schema Inference Engine."""
+
 import io
 import re
-from typing import Any, Dict, List, Tuple
+from typing import Any
+
 import pandas as pd
+
 from app.core.errors import AppException
 
 
@@ -44,7 +47,7 @@ def parse_file_preview(
     content: bytes,
     filename: str,
     max_rows: int = 100,
-) -> Tuple[str, List[Dict[str, str]], List[Dict[str, Any]], int]:
+) -> tuple[str, list[dict[str, str]], list[dict[str, Any]], int]:
     """Parse file preview and infer column types."""
     ext = filename.lower().split(".")[-1] if "." in filename else ""
 
@@ -74,11 +77,13 @@ def parse_file_preview(
                 df = df.head(max_rows)
             file_format = "json"
         else:
-            raise AppException(f"Unsupported file format '.{ext}'. Supported: CSV, TSV, XLSX, Parquet, JSON.")
+            raise AppException(
+                f"Unsupported file format '.{ext}'. Supported: CSV, TSV, XLSX, Parquet, JSON."
+            )
     except AppException:
         raise
     except Exception as e:
-        raise AppException(f"Failed to read file preview: {str(e)}")
+        raise AppException(f"Failed to read file preview: {str(e)}") from e
 
     original_columns = list(df.columns)
     sanitized_columns = [sanitize_column_name(c) for c in original_columns]
@@ -87,16 +92,18 @@ def parse_file_preview(
     column_meta = []
     for col in sanitized_columns:
         duck_type = infer_duckdb_type(str(df[col].dtype), df[col])
-        column_meta.append({
-            "name": col,
-            "type": duck_type,
-            "original_name": str(original_columns[sanitized_columns.index(col)]),
-        })
+        column_meta.append(
+            {
+                "name": col,
+                "type": duck_type,
+                "original_name": str(original_columns[sanitized_columns.index(col)]),
+            }
+        )
 
     # Prepare JSON serializable preview rows as dicts for UI table rendering
-    preview_rows: List[Dict[str, Any]] = []
+    preview_rows: list[dict[str, Any]] = []
     for _, row in df.head(max_rows).iterrows():
-        row_dict: Dict[str, Any] = {}
+        row_dict: dict[str, Any] = {}
         for col in sanitized_columns:
             val = row[col]
             if pd.isna(val):

@@ -1,9 +1,11 @@
 """Security, Cryptography, and Token Management."""
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Optional
+
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
 import bcrypt
-from cryptography.fernet import Fernet
 import jwt
+from cryptography.fernet import Fernet
 
 from app.core.config import settings
 from app.core.errors import AuthenticationError
@@ -23,37 +25,37 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         return False
 
 
-def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
+def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = None) -> str:
     """Create signed JWT access token."""
     to_encode = data.copy()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expire = now + (expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"iat": now, "exp": expire, "type": "access"})
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm="HS256")
 
 
-def create_refresh_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
+def create_refresh_token(data: dict[str, Any], expires_delta: timedelta | None = None) -> str:
     """Create signed JWT refresh token."""
     to_encode = data.copy()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expire = now + (expires_delta or timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS))
     to_encode.update({"iat": now, "exp": expire, "type": "refresh"})
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm="HS256")
 
 
-def decode_token(token: str) -> Dict[str, Any]:
+def decode_token(token: str) -> dict[str, Any]:
     """Decode and validate JWT token signature and expiration."""
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
         return payload
-    except jwt.ExpiredSignatureError:
-        raise AuthenticationError("Token has expired")
-    except jwt.InvalidTokenError:
-        raise AuthenticationError("Invalid authentication token")
+    except jwt.ExpiredSignatureError as e:
+        raise AuthenticationError("Token has expired") from e
+    except jwt.InvalidTokenError as e:
+        raise AuthenticationError("Invalid authentication token") from e
 
 
 # --- Credential Encryption via Fernet ---
-_fernet_instance: Optional[Fernet] = None
+_fernet_instance: Fernet | None = None
 
 
 def get_fernet() -> Fernet:
@@ -84,6 +86,5 @@ def decrypt_secret(encrypted_secret: str) -> str:
     cipher = get_fernet()
     try:
         return cipher.decrypt(encrypted_secret.encode("utf-8")).decode("utf-8")
-    except Exception:
-        raise ValueError("Failed to decrypt secret with configured encryption key")
-
+    except Exception as e:
+        raise ValueError("Failed to decrypt secret with configured encryption key") from e

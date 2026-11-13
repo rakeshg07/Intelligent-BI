@@ -1,7 +1,9 @@
 """File Uploads and DuckDB Ingestion Router."""
+
 import json
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 import duckdb
 from fastapi import APIRouter, Depends, File, Form, UploadFile, status
 from sqlalchemy import select
@@ -22,7 +24,7 @@ router = APIRouter(prefix="/uploads", tags=["Uploads"])
 async def preview_upload_file(
     file: UploadFile = File(...),
     current_user: User = Depends(require_permission("uploads:use")),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Parse uploaded file and return inferred columns, types, and first 100 rows."""
     content = await file.read()
     filename = file.filename or "uploaded_data.csv"
@@ -30,7 +32,9 @@ async def preview_upload_file(
     # Check file size limit
     max_bytes = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
     if len(content) > max_bytes:
-        raise AppException(f"File exceeds maximum allowed size of {settings.MAX_UPLOAD_SIZE_MB} MB.")
+        raise AppException(
+            f"File exceeds maximum allowed size of {settings.MAX_UPLOAD_SIZE_MB} MB."
+        )
 
     file_format, columns, rows, count = parse_file_preview(content, filename, max_rows=100)
     suggested_table = sanitize_column_name(filename.rsplit(".", 1)[0])
@@ -51,10 +55,10 @@ async def import_upload_file(
     file: UploadFile = File(...),
     table_name: str = Form(...),
     conflict_mode: str = Form("replace"),  # fail, replace, append
-    column_types: Optional[str] = Form(None),  # JSON string of {col_name: target_type}
+    column_types: str | None = Form(None),  # JSON string of {col_name: target_type}
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_permission("uploads:use")),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Ingest file directly into DuckDB and create queryable Dataset."""
     content = await file.read()
     filename = file.filename or "data.csv"
@@ -81,7 +85,9 @@ async def import_upload_file(
         "dataset_id": str(dataset.id),
         "dataset_name": dataset.name,
         "table_name": dataset.table_name,
-        "columns_count": len(dataset.columns) if hasattr(dataset, "columns") and dataset.columns else 0,
+        "columns_count": len(dataset.columns)
+        if hasattr(dataset, "columns") and dataset.columns
+        else 0,
     }
 
 
@@ -89,7 +95,7 @@ async def import_upload_file(
 async def list_uploads(
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_permission("uploads:use")),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """List uploaded files."""
     stmt = (
         select(UploadedFile)
@@ -122,7 +128,7 @@ async def delete_upload(
     id: uuid.UUID,
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_permission("uploads:use")),
-) -> Dict[str, str]:
+) -> dict[str, str]:
     """Delete uploaded file record and drop table in DuckDB."""
     stmt = select(UploadedFile).where(UploadedFile.id == id, UploadedFile.deleted_at.is_(None))
     result = await session.execute(stmt)

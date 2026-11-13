@@ -26,4 +26,3 @@ Your mission is to help users explore their business data, answer analytical que
    - Use bullet points for key data points.
    - Cite the exact figures returned by the query.
 """
-

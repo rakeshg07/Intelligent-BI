@@ -1,6 +1,8 @@
 """Generic SQLAlchemy Database Connector (Postgres, MySQL, SQLite, MSSQL, ClickHouse)."""
+
 import time
-from typing import Any, List, Optional, Tuple
+from typing import Any
+
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import Engine
 
@@ -14,7 +16,7 @@ class SQLAlchemyConnector(BaseConnector):
     def __init__(self, uri: str, statement_timeout_seconds: int = 30):
         self.uri = uri
         self.timeout_seconds = statement_timeout_seconds
-        self._engine: Optional[Engine] = None
+        self._engine: Engine | None = None
 
     def _get_engine(self) -> Engine:
         if self._engine is None:
@@ -26,7 +28,7 @@ class SQLAlchemyConnector(BaseConnector):
             self._engine = create_engine(self.uri, **engine_args)
         return self._engine
 
-    def test_connection(self) -> Tuple[bool, str]:
+    def test_connection(self) -> tuple[bool, str]:
         try:
             engine = self._get_engine()
             with engine.connect() as conn:
@@ -37,32 +39,31 @@ class SQLAlchemyConnector(BaseConnector):
         except Exception as e:
             return False, f"Connection failed: {str(e)}"
 
-    def get_schemas(self) -> List[str]:
+    def get_schemas(self) -> list[str]:
         try:
             engine = self._get_engine()
             inspector = inspect(engine)
             schemas = inspector.get_schema_names()
             # Filter standard system schemas
             filtered = [
-                s for s in schemas
-                if s not in ("information_schema", "pg_catalog", "pg_toast")
+                s for s in schemas if s not in ("information_schema", "pg_catalog", "pg_toast")
             ]
             return filtered if filtered else ["public"]
-        except Exception as e:
+        except Exception:
             return ["public"]
 
-    def get_tables(self, schema_name: Optional[str] = None) -> List[str]:
+    def get_tables(self, schema_name: str | None = None) -> list[str]:
         try:
             engine = self._get_engine()
             inspector = inspect(engine)
             schema = schema_name or ("public" if "postgres" in self.uri else None)
             tables = inspector.get_table_names(schema=schema)
             views = inspector.get_view_names(schema=schema)
-            return sorted(list(set(tables + views)))
+            return sorted(set(tables + views))
         except Exception as e:
-            raise AppException(f"Failed to fetch tables: {str(e)}")
+            raise AppException(f"Failed to fetch tables: {str(e)}") from e
 
-    def get_columns(self, table_name: str, schema_name: Optional[str] = None) -> List[ColumnMetadata]:
+    def get_columns(self, table_name: str, schema_name: str | None = None) -> list[ColumnMetadata]:
         try:
             engine = self._get_engine()
             inspector = inspect(engine)
@@ -78,7 +79,9 @@ class SQLAlchemyConnector(BaseConnector):
                 for col in columns
             ]
         except Exception as e:
-            raise AppException(f"Failed to inspect columns for table '{table_name}': {str(e)}")
+            raise AppException(
+                f"Failed to inspect columns for table '{table_name}': {str(e)}"
+            ) from e
 
     def execute_query(
         self,
@@ -98,7 +101,7 @@ class SQLAlchemyConnector(BaseConnector):
             rows = raw_rows[:limit]
 
             # Format rows for JSON serialization
-            formatted_rows: List[List[Any]] = []
+            formatted_rows: list[list[Any]] = []
             for row in rows:
                 formatted_row = []
                 for val in row:
@@ -113,7 +116,10 @@ class SQLAlchemyConnector(BaseConnector):
             duration_ms = int((time.time() - start_time) * 1000)
             return QueryResult(
                 columns=columns,
-                column_types=[str(type(rows[0][i]).__name__) if rows and rows[0][i] is not None else "string" for i in range(len(columns))],
+                column_types=[
+                    str(type(rows[0][i]).__name__) if rows and rows[0][i] is not None else "string"
+                    for i in range(len(columns))
+                ],
                 rows=formatted_rows,
                 row_count=len(formatted_rows),
                 duration_ms=duration_ms,
@@ -126,4 +132,4 @@ class SQLAlchemyConnector(BaseConnector):
                 f"Query execution failed: {str(e)}",
                 code="QUERY_EXECUTION_ERROR",
                 details={"sql": sql, "duration_ms": duration_ms},
-            )
+            ) from e

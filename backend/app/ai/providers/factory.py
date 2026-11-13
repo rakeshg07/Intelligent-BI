@@ -1,5 +1,5 @@
 """LLM Provider Factory configured for Groq, Gemini, and OpenAI."""
-from typing import Optional
+
 from app.ai.providers.base import BaseLLMProvider
 from app.ai.providers.gemini import GeminiProvider
 from app.ai.providers.groq import GroqProvider
@@ -8,8 +8,8 @@ from app.core.config import settings
 
 
 def get_llm_provider(
-    provider_name: Optional[str] = None,
-    model_name: Optional[str] = None,
+    provider_name: str | None = None,
+    model_name: str | None = None,
 ) -> BaseLLMProvider:
     """Instantiate configured LLM provider."""
     provider = (provider_name or settings.LLM_PROVIDER or "groq").lower()
@@ -17,7 +17,9 @@ def get_llm_provider(
 
     if provider == "gemini":
         if settings.GEMINI_API_KEY:
-            return GeminiProvider(model=model or "gemini-flash-lite-latest", api_key=settings.GEMINI_API_KEY)
+            return GeminiProvider(
+                model=model or "gemini-flash-lite-latest", api_key=settings.GEMINI_API_KEY
+            )
         return MockProvider(model="mock-analyst")
 
     if provider == "groq":

@@ -1,6 +1,7 @@
 """Base Connector Abstract Interface."""
+
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 
 class ColumnMetadata:
@@ -10,7 +11,7 @@ class ColumnMetadata:
         data_type: str,
         nullable: bool = True,
         is_primary_key: bool = False,
-        description: Optional[str] = None,
+        description: str | None = None,
     ):
         self.name = name
         self.data_type = data_type
@@ -18,7 +19,7 @@ class ColumnMetadata:
         self.is_primary_key = is_primary_key
         self.description = description
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "name": self.name,
             "data_type": self.data_type,
@@ -31,9 +32,9 @@ class ColumnMetadata:
 class QueryResult:
     def __init__(
         self,
-        columns: List[str],
-        column_types: List[str],
-        rows: List[List[Any]],
+        columns: list[str],
+        column_types: list[str],
+        rows: list[list[Any]],
         row_count: int,
         duration_ms: int,
         sql: str,
@@ -47,7 +48,7 @@ class QueryResult:
         self.sql = sql
         self.truncated = truncated
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "columns": self.columns,
             "column_types": self.column_types,
@@ -63,22 +64,22 @@ class BaseConnector(ABC):
     """Abstract base connector for analytical databases."""
 
     @abstractmethod
-    def test_connection(self) -> Tuple[bool, str]:
+    def test_connection(self) -> tuple[bool, str]:
         """Test connection and return (success, message)."""
         pass
 
     @abstractmethod
-    def get_schemas(self) -> List[str]:
+    def get_schemas(self) -> list[str]:
         """List accessible schemas/databases."""
         pass
 
     @abstractmethod
-    def get_tables(self, schema_name: Optional[str] = None) -> List[str]:
+    def get_tables(self, schema_name: str | None = None) -> list[str]:
         """List table and view names in the given schema."""
         pass
 
     @abstractmethod
-    def get_columns(self, table_name: str, schema_name: Optional[str] = None) -> List[ColumnMetadata]:
+    def get_columns(self, table_name: str, schema_name: str | None = None) -> list[ColumnMetadata]:
         """Inspect columns and data types for the given table."""
         pass
 
@@ -91,4 +92,3 @@ class BaseConnector(ABC):
     ) -> QueryResult:
         """Execute a read query and return standardized QueryResult."""
         pass
-

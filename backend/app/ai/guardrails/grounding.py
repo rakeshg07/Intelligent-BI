@@ -4,8 +4,9 @@ Strict verification ensures that every single numeric figure, percentage,
 or monetary value stated in the AI Assistant's answer is directly traced
 to the actual executed database query results.
 """
+
 import re
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any
 
 
 def _normalize_number(num_str: str) -> float | None:
@@ -29,7 +30,7 @@ def _normalize_number(num_str: str) -> float | None:
         return None
 
 
-def extract_numbers_from_text(text: str) -> List[Tuple[str, float]]:
+def extract_numbers_from_text(text: str) -> list[tuple[str, float]]:
     """Extract all candidate numeric expressions from natural language text.
 
     Returns tuples of (raw_token, parsed_float_value).
@@ -37,13 +38,19 @@ def extract_numbers_from_text(text: str) -> List[Tuple[str, float]]:
     pattern = r"\$?\s*\d[\d,]*(?:\.\d+)?%?[kKmMbB]?"
 
     matches = [m.group(0).strip() for m in re.finditer(pattern, text) if m.group(0).strip()]
-    results: List[Tuple[str, float]] = []
+    results: list[tuple[str, float]] = []
 
     for token in matches:
         val = _normalize_number(token)
         if val is not None:
             # Skip obvious year tokens (e.g., 1950-2050) if token has no decimal/currency
-            if 1950 <= val <= 2050 and "." not in token and "$" not in token and "%" not in token and "," not in token:
+            if (
+                1950 <= val <= 2050
+                and "." not in token
+                and "$" not in token
+                and "%" not in token
+                and "," not in token
+            ):
                 continue
             results.append((token, val))
 
@@ -51,11 +58,11 @@ def extract_numbers_from_text(text: str) -> List[Tuple[str, float]]:
 
 
 def extract_numbers_from_query_results(
-    rows: List[List[Any]] | List[Dict[str, Any]],
-    columns: List[str] | None = None,
-) -> Set[float]:
+    rows: list[list[Any]] | list[dict[str, Any]],
+    columns: list[str] | None = None,
+) -> set[float]:
     """Extract all reference numbers present in executed SQL query result rows."""
-    reference_numbers: Set[float] = set()
+    reference_numbers: set[float] = set()
 
     # Add row count as a valid reference number
     reference_numbers.add(float(len(rows)))
@@ -80,8 +87,8 @@ class GroundingResult:
         self,
         is_grounded: bool,
         grounding_score: float,
-        matched_figures: List[Dict[str, Any]],
-        unmatched_figures: List[Dict[str, Any]],
+        matched_figures: list[dict[str, Any]],
+        unmatched_figures: list[dict[str, Any]],
         details: str,
     ):
         self.is_grounded = is_grounded
@@ -90,7 +97,7 @@ class GroundingResult:
         self.unmatched_figures = unmatched_figures
         self.details = details
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "is_grounded": self.is_grounded,
             "grounding_score": round(self.grounding_score, 4),
@@ -107,8 +114,8 @@ class GroundingGuardrail:
     def verify(
         cls,
         response_text: str,
-        query_rows: List[List[Any]] | List[Dict[str, Any]],
-        columns: List[str] | None = None,
+        query_rows: list[list[Any]] | list[dict[str, Any]],
+        columns: list[str] | None = None,
         relative_tolerance: float = 0.015,  # 1.5% tolerance for rounding / format precision
     ) -> GroundingResult:
         """Verify natural language response against executed SQL data."""
@@ -125,8 +132,8 @@ class GroundingGuardrail:
                 details="No numeric claims made in response; grounded.",
             )
 
-        matched: List[Dict[str, Any]] = []
-        unmatched: List[Dict[str, Any]] = []
+        matched: list[dict[str, Any]] = []
+        unmatched: list[dict[str, Any]] = []
 
         for token, val in extracted:
             is_match = False
@@ -144,7 +151,10 @@ class GroundingGuardrail:
                     break
                 # Check percentage equivalence: 0.25 vs 25%
                 if "%" in token and ref != 0:
-                    if abs((val / 100.0) - ref) <= relative_tolerance or abs(val - (ref * 100.0)) <= relative_tolerance:
+                    if (
+                        abs((val / 100.0) - ref) <= relative_tolerance
+                        or abs(val - (ref * 100.0)) <= relative_tolerance
+                    ):
                         is_match = True
                         break
 

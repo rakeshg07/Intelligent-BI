@@ -1,6 +1,9 @@
 """FastAPI Dependency Injection Providers."""
+
 import uuid
-from typing import Any, AsyncGenerator, Callable, List
+from collections.abc import AsyncGenerator, Callable
+from typing import Any
+
 from fastapi import Cookie, Depends, Header, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,7 +12,7 @@ from sqlalchemy.orm import selectinload
 from app.core.config import settings
 from app.core.errors import AuthenticationError, PermissionDeniedError
 from app.core.security import decode_token
-from app.db.models import Permission, Role, User
+from app.db.models import Role, User
 from app.db.session import AsyncSessionLocal
 
 
@@ -58,8 +61,8 @@ async def get_current_user(
 
     try:
         user_uuid = uuid.UUID(str(user_id_raw))
-    except (ValueError, TypeError):
-        raise AuthenticationError("Invalid token: Malformed subject UUID")
+    except (ValueError, TypeError) as e:
+        raise AuthenticationError("Invalid token: Malformed subject UUID") from e
 
     # Fetch user with eager loaded roles and their permissions
     stmt = (
@@ -112,4 +115,3 @@ def require_permission(permission_code: str) -> Callable[..., Any]:
         return current_user
 
     return permission_checker
-

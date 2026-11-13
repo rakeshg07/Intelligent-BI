@@ -1,8 +1,10 @@
 """SQL Validation and AST Guardrails using sqlglot (ADR-003)."""
+
 import re
-from typing import List, Optional, Tuple
+
 import sqlglot
 from sqlglot import exp
+
 from app.core.errors import SQLGuardrailError
 
 # Blacklisted dangerous functions by pattern
@@ -62,7 +64,7 @@ def validate_and_format_sql(
     try:
         expressions = sqlglot.parse(cleaned, read=glot_dialect)
     except Exception as e:
-        raise SQLGuardrailError(f"SQL Syntax Error: {str(e)}")
+        raise SQLGuardrailError(f"SQL Syntax Error: {str(e)}") from e
 
     if not expressions:
         raise SQLGuardrailError("Could not parse query.")
@@ -83,7 +85,8 @@ def validate_and_format_sql(
 
         if not (is_select or is_with or is_union):
             raise SQLGuardrailError(
-                f"Prohibited SQL statement type: '{type(ast).__name__}'. Only read-only SELECT or WITH...SELECT queries are allowed."
+                f"Prohibited SQL statement type: '{type(ast).__name__}'. "
+                "Only read-only SELECT or WITH...SELECT queries are allowed."
             )
 
     # 4. Dangerous function check
@@ -95,7 +98,7 @@ def validate_and_format_sql(
         }
         matched = candidate_names & DANGEROUS_FUNCTIONS
         if matched:
-            prohibited_name = sorted(list(matched))[0]
+            prohibited_name = sorted(matched)[0]
             raise SQLGuardrailError(f"Prohibited function detected: '{prohibited_name}'.")
 
     # 5. Enforce or clamp LIMIT

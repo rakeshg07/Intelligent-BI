@@ -1,5 +1,7 @@
 """Authentication API Endpoints (Login, Logout, Me, Refresh)."""
-from typing import Any, List, Literal
+
+from typing import Any, Literal
+
 from fastapi import APIRouter, Cookie, Depends, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,13 +22,13 @@ from app.schemas.auth import LoginRequest, RoleOut, TokenResponse, UserProfileOu
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
-def _extract_user_permissions(user: User) -> List[str]:
+def _extract_user_permissions(user: User) -> list[str]:
     """Helper to compile flat list of unique permission codes for a user."""
     perms = set()
     for role in user.roles:
         for perm in role.permissions:
             perms.add(perm.code)
-    return sorted(list(perms))
+    return sorted(perms)
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -57,8 +59,10 @@ async def login(
 
     # Set secure httpOnly cookies
     samesite_val: Literal["lax", "strict", "none"] = (
-        "strict" if settings.COOKIE_SAMESITE.lower() == "strict"
-        else "none" if settings.COOKIE_SAMESITE.lower() == "none"
+        "strict"
+        if settings.COOKIE_SAMESITE.lower() == "strict"
+        else "none"
+        if settings.COOKIE_SAMESITE.lower() == "none"
         else "lax"
     )
 
@@ -158,8 +162,10 @@ async def refresh_token(
     new_access_token = create_access_token({"sub": str(user.id), "email": user.email})
 
     samesite_val: Literal["lax", "strict", "none"] = (
-        "strict" if settings.COOKIE_SAMESITE.lower() == "strict"
-        else "none" if settings.COOKIE_SAMESITE.lower() == "none"
+        "strict"
+        if settings.COOKIE_SAMESITE.lower() == "strict"
+        else "none"
+        if settings.COOKIE_SAMESITE.lower() == "none"
         else "lax"
     )
 
@@ -170,8 +176,7 @@ async def refresh_token(
         httponly=True,
         secure=settings.COOKIE_SECURE,
         samesite=samesite_val,
-        path="/"
+        path="/",
     )
 
     return {"message": "Token refreshed successfully"}
-

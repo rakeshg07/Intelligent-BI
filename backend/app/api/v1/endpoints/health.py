@@ -1,6 +1,8 @@
 """Health Check and Service Readiness Endpoints."""
+
 import os
-from typing import Any, Dict
+from typing import Any
+
 from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,7 +19,7 @@ router = APIRouter(prefix="/health", tags=["Health"])
 
 
 @router.get("/live", status_code=status.HTTP_200_OK)
-async def liveness_probe() -> Dict[str, str]:
+async def liveness_probe() -> dict[str, str]:
     """Basic liveness check verifying the application process is running."""
     return {"status": "alive", "version": settings.VERSION}
 
@@ -26,9 +28,9 @@ async def liveness_probe() -> Dict[str, str]:
 async def readiness_probe(
     response: Response,
     session: AsyncSession = Depends(get_db_session),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Deep readiness probe verifying database, cache, and filesystem access."""
-    checks: Dict[str, str] = {}
+    checks: dict[str, str] = {}
     is_ready = True
 
     # 1. PostgreSQL Check
@@ -75,4 +77,3 @@ async def readiness_probe(
         return {"status": "unhealthy", "checks": checks}
 
     return {"status": "healthy", "checks": checks}
-

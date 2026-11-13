@@ -1,6 +1,8 @@
 """Datasets Semantic Layer API Endpoints."""
+
 import uuid
-from typing import Any, Dict, List
+from typing import Any
+
 from fastapi import APIRouter, Depends, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,7 +10,7 @@ from sqlalchemy.orm import selectinload
 
 from app.api.v1.deps import get_db_session, require_permission
 from app.connectors.factory import get_connector
-from app.core.errors import NotFoundError, AppException
+from app.core.errors import NotFoundError
 from app.db.models import (
     DatabaseConnection,
     Dataset,
@@ -18,11 +20,8 @@ from app.db.models import (
     User,
 )
 from app.schemas.dataset import (
-    DatasetColumnBase,
     DatasetCreate,
     DatasetMetricBase,
-    DatasetOut,
-    DatasetUpdate,
     RLSRuleBase,
 )
 
@@ -145,7 +144,9 @@ async def create_dataset(
             for c in cols:
                 c_type = c.data_type.upper()
                 is_dt = "TIME" in c_type or "DATE" in c_type
-                is_dim = not any(t in c_type for t in ("INT", "DOUBLE", "FLOAT", "DECIMAL", "NUMERIC"))
+                is_dim = not any(
+                    t in c_type for t in ("INT", "DOUBLE", "FLOAT", "DECIMAL", "NUMERIC")
+                )
                 col_record = DatasetColumn(
                     dataset_id=dataset.id,
                     name=c.name,
@@ -158,7 +159,7 @@ async def create_dataset(
                     is_hidden_from_ai=False,
                 )
                 session.add(col_record)
-        except Exception as e:
+        except Exception:
             # Continue even if automatic inspection encounters an issue
             pass
 
@@ -247,7 +248,7 @@ async def delete_dataset(
     id: uuid.UUID,
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_permission("datasets:write")),
-) -> Dict[str, str]:
+) -> dict[str, str]:
     """Delete a semantic dataset."""
     stmt = select(Dataset).where(Dataset.id == id, Dataset.deleted_at.is_(None))
     result = await session.execute(stmt)
@@ -266,7 +267,7 @@ async def add_dataset_metric(
     payload: DatasetMetricBase,
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_permission("datasets:write")),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Add a calculated aggregation metric to the dataset."""
     stmt = select(Dataset).where(Dataset.id == id, Dataset.deleted_at.is_(None))
     result = await session.execute(stmt)
@@ -295,7 +296,7 @@ async def delete_dataset_metric(
     metric_id: uuid.UUID,
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_permission("datasets:write")),
-) -> Dict[str, str]:
+) -> dict[str, str]:
     """Delete a metric from a dataset."""
     stmt = select(DatasetMetric).where(
         DatasetMetric.id == metric_id,
@@ -317,7 +318,7 @@ async def add_dataset_rls_rule(
     payload: RLSRuleBase,
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_permission("datasets:write")),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Add a row-level security rule to the dataset."""
     stmt = select(Dataset).where(Dataset.id == id, Dataset.deleted_at.is_(None))
     result = await session.execute(stmt)

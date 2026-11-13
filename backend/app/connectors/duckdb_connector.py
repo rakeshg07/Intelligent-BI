@@ -1,8 +1,10 @@
 """DuckDB Analytical Connector for Internal File Storage."""
+
 import os
 import threading
 import time
-from typing import Any, List, Optional, Tuple
+from typing import Any
+
 import duckdb
 
 from app.connectors.base import BaseConnector, ColumnMetadata, QueryResult
@@ -16,7 +18,7 @@ duckdb_write_lock = threading.Lock()
 class DuckDBConnector(BaseConnector):
     """DuckDB Connector with read-only concurrent access and locked writes."""
 
-    def __init__(self, db_path: Optional[str] = None):
+    def __init__(self, db_path: str | None = None):
         self.db_path = db_path or settings.DUCKDB_DATABASE_PATH
         # Ensure target folder exists
         target_dir = os.path.dirname(self.db_path) or "."
@@ -31,7 +33,7 @@ class DuckDBConnector(BaseConnector):
                 init_conn.close()
         return duckdb.connect(self.db_path, read_only=True)
 
-    def test_connection(self) -> Tuple[bool, str]:
+    def test_connection(self) -> tuple[bool, str]:
         conn = None
         try:
             conn = self._get_read_connection()
@@ -45,12 +47,16 @@ class DuckDBConnector(BaseConnector):
             if conn is not None:
                 conn.close()
 
-    def get_schemas(self) -> List[str]:
+    def get_schemas(self) -> list[str]:
         conn = None
         try:
             conn = self._get_read_connection()
-            rows = conn.execute("SELECT DISTINCT schema_name FROM information_schema.schemata ORDER BY schema_name").fetchall()
-            unique_schemas = sorted(list({r[0] for r in rows if r[0] not in ("information_schema", "pg_catalog")}))
+            rows = conn.execute(
+                "SELECT DISTINCT schema_name FROM information_schema.schemata ORDER BY schema_name"
+            ).fetchall()
+            unique_schemas = sorted(
+                {r[0] for r in rows if r[0] not in ("information_schema", "pg_catalog")}
+            )
             return unique_schemas or ["main"]
         except Exception:
             return ["main"]
@@ -58,21 +64,24 @@ class DuckDBConnector(BaseConnector):
             if conn is not None:
                 conn.close()
 
-    def get_tables(self, schema_name: Optional[str] = None) -> List[str]:
+    def get_tables(self, schema_name: str | None = None) -> list[str]:
         schema = schema_name or "main"
         conn = None
         try:
             conn = self._get_read_connection()
-            query = "SELECT table_name FROM information_schema.tables WHERE table_schema = ? ORDER BY table_name"
+            query = (
+                "SELECT table_name FROM information_schema.tables "
+                "WHERE table_schema = ? ORDER BY table_name"
+            )
             rows = conn.execute(query, [schema]).fetchall()
             return [r[0] for r in rows]
         except Exception as e:
-            raise AppException(f"Failed to list tables in schema '{schema}': {str(e)}")
+            raise AppException(f"Failed to list tables in schema '{schema}': {str(e)}") from e
         finally:
             if conn is not None:
                 conn.close()
 
-    def get_columns(self, table_name: str, schema_name: Optional[str] = None) -> List[ColumnMetadata]:
+    def get_columns(self, table_name: str, schema_name: str | None = None) -> list[ColumnMetadata]:
         schema = schema_name or "main"
         conn = None
         try:
@@ -93,7 +102,9 @@ class DuckDBConnector(BaseConnector):
                 for r in rows
             ]
         except Exception as e:
-            raise AppException(f"Failed to inspect columns for table '{table_name}': {str(e)}")
+            raise AppException(
+                f"Failed to inspect columns for table '{table_name}': {str(e)}"
+            ) from e
         finally:
             if conn is not None:
                 conn.close()
@@ -123,7 +134,7 @@ class DuckDBConnector(BaseConnector):
             rows = raw_rows[:limit]
 
             # Format rows for JSON serialization
-            formatted_rows: List[List[Any]] = []
+            formatted_rows: list[list[Any]] = []
             for row in rows:
                 formatted_row = []
                 for val in row:
@@ -151,8 +162,7 @@ class DuckDBConnector(BaseConnector):
                 f"Query execution failed: {str(e)}",
                 code="QUERY_EXECUTION_ERROR",
                 details={"sql": sql, "duration_ms": duration_ms},
-            )
+            ) from e
         finally:
             if conn is not None:
                 conn.close()
-

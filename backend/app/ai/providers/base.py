@@ -1,27 +1,29 @@
 """Base LLM Provider Interface."""
+
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
 class ToolCall(BaseModel):
     id: str
     name: str
-    arguments: Dict[str, Any]
-    extra_content: Optional[Dict[str, Any]] = None
+    arguments: dict[str, Any]
+    extra_content: dict[str, Any] | None = None
 
 
 class LLMMessage(BaseModel):
     role: str  # system, user, assistant, tool
-    content: Optional[str] = None
-    tool_calls: Optional[List[ToolCall]] = None
-    tool_call_id: Optional[str] = None
-    name: Optional[str] = None
+    content: str | None = None
+    tool_calls: list[ToolCall] | None = None
+    tool_call_id: str | None = None
+    name: str | None = None
 
 
 class LLMResponse(BaseModel):
-    content: Optional[str] = None
-    tool_calls: List[ToolCall] = Field(default_factory=list)
+    content: str | None = None
+    tool_calls: list[ToolCall] = Field(default_factory=list)
     finish_reason: str = "stop"  # stop, tool_calls, length
     provider: str
     model: str
@@ -38,10 +40,9 @@ class BaseLLMProvider(ABC):
     @abstractmethod
     async def generate(
         self,
-        messages: List[LLMMessage],
-        tools: Optional[List[Dict[str, Any]]] = None,
+        messages: list[LLMMessage],
+        tools: list[dict[str, Any]] | None = None,
         temperature: float = 0.0,
     ) -> LLMResponse:
         """Generate response given messages and available tools."""
         pass
-

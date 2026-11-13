@@ -1,5 +1,7 @@
 """Application Exception Classes and Global Error Handlers."""
-from typing import Any, Dict, Optional
+
+from typing import Any
+
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -13,7 +15,7 @@ class AppException(Exception):
         message: str,
         code: str = "INTERNAL_ERROR",
         status_code: int = status.HTTP_500_INTERNAL_SERVER_ERROR,
-        details: Optional[Dict[str, Any]] = None,
+        details: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(message)
         self.message = message
@@ -23,7 +25,9 @@ class AppException(Exception):
 
 
 class AuthenticationError(AppException):
-    def __init__(self, message: str = "Authentication failed", details: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(
+        self, message: str = "Authentication failed", details: dict[str, Any] | None = None
+    ) -> None:
         super().__init__(
             message=message,
             code="AUTHENTICATION_FAILED",
@@ -33,7 +37,9 @@ class AuthenticationError(AppException):
 
 
 class PermissionDeniedError(AppException):
-    def __init__(self, message: str = "Permission denied", details: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(
+        self, message: str = "Permission denied", details: dict[str, Any] | None = None
+    ) -> None:
         super().__init__(
             message=message,
             code="PERMISSION_DENIED",
@@ -43,7 +49,9 @@ class PermissionDeniedError(AppException):
 
 
 class NotFoundError(AppException):
-    def __init__(self, message: str = "Resource not found", details: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(
+        self, message: str = "Resource not found", details: dict[str, Any] | None = None
+    ) -> None:
         super().__init__(
             message=message,
             code="NOT_FOUND",
@@ -53,7 +61,9 @@ class NotFoundError(AppException):
 
 
 class ConflictError(AppException):
-    def __init__(self, message: str = "Resource conflict", details: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(
+        self, message: str = "Resource conflict", details: dict[str, Any] | None = None
+    ) -> None:
         super().__init__(
             message=message,
             code="CONFLICT",
@@ -63,7 +73,9 @@ class ConflictError(AppException):
 
 
 class ValidationError(AppException):
-    def __init__(self, message: str = "Validation failed", details: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(
+        self, message: str = "Validation failed", details: dict[str, Any] | None = None
+    ) -> None:
         super().__init__(
             message=message,
             code="VALIDATION_ERROR",
@@ -73,7 +85,7 @@ class ValidationError(AppException):
 
 
 class SQLGuardrailError(AppException):
-    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(self, message: str, details: dict[str, Any] | None = None) -> None:
         super().__init__(
             message=message,
             code="SQL_GUARDRAIL_VIOLATION",
@@ -117,4 +129,3 @@ def register_error_handlers(app: FastAPI) -> None:
                 "details": {"error": str(exc)},
             },
         )
-

@@ -1,7 +1,9 @@
 """Database Connections API Endpoints."""
+
 import uuid
-from typing import Any, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Any
+
+from fastapi import APIRouter, Depends, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,7 +19,6 @@ from app.schemas.database import (
     ConnectionTestResponse,
     DatabaseConnectionCreate,
     DatabaseConnectionOut,
-    DatabaseConnectionUpdate,
 )
 
 router = APIRouter(prefix="/databases", tags=["Databases"])
@@ -49,7 +50,7 @@ def _mask_connection(conn: DatabaseConnection) -> DatabaseConnectionOut:
     )
 
 
-@router.get("/", response_model=List[DatabaseConnectionOut])
+@router.get("/", response_model=list[DatabaseConnectionOut])
 async def list_databases(
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_permission("databases:read")),
@@ -190,7 +191,9 @@ async def delete_database(
     if not conn:
         raise NotFoundError("Database connection not found.")
     if conn.is_system:
-        raise PermissionDeniedError("System connections (e.g. built-in DuckDB 'Uploads') cannot be deleted.")
+        raise PermissionDeniedError(
+            "System connections (e.g. built-in DuckDB 'Uploads') cannot be deleted."
+        )
 
     await session.delete(conn)
     await session.commit()
@@ -202,7 +205,7 @@ async def get_database_schemas(
     id: uuid.UUID,
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_permission("databases:read")),
-) -> List[str]:
+) -> list[str]:
     """List schemas in the database."""
     stmt = select(DatabaseConnection).where(
         DatabaseConnection.id == id,
@@ -221,10 +224,10 @@ async def get_database_schemas(
 @router.get("/{id}/schemas/{schema}/tables")
 async def get_database_tables(
     id: uuid.UUID,
-    schema: Optional[str] = None,
+    schema: str | None = None,
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_permission("databases:read")),
-) -> List[str]:
+) -> list[str]:
     """List tables and views in a schema."""
     stmt = select(DatabaseConnection).where(
         DatabaseConnection.id == id,
@@ -244,10 +247,10 @@ async def get_database_tables(
 async def get_database_columns(
     id: uuid.UUID,
     table: str,
-    schema: Optional[str] = None,
+    schema: str | None = None,
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_permission("databases:read")),
-) -> List[dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Inspect columns and data types for a table."""
     stmt = select(DatabaseConnection).where(
         DatabaseConnection.id == id,

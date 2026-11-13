@@ -1,7 +1,8 @@
 """Deterministic Test / Fallback Provider for Local Offline Testing (ADR-004 & Phase 4)."""
+
 import json
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from app.ai.providers.base import BaseLLMProvider, LLMMessage, LLMResponse, ToolCall
 
@@ -14,8 +15,8 @@ class MockProvider(BaseLLMProvider):
 
     async def generate(
         self,
-        messages: List[LLMMessage],
-        tools: Optional[List[Dict[str, Any]]] = None,
+        messages: list[LLMMessage],
+        tools: list[dict[str, Any]] | None = None,
         temperature: float = 0.0,
     ) -> LLMResponse:
         # Check if the last message is a tool response
@@ -61,18 +62,28 @@ class MockProvider(BaseLLMProvider):
             if len(rows) == 1 and len(columns) == 1:
                 col_name = columns[0].replace("_", " ").title()
                 val = rows[0][0]
-                lines.append(f"- **{col_name}**: **${val:,.2f}**" if isinstance(val, (int, float)) else f"- **{col_name}**: **{val}**")
+                lines.append(
+                    f"- **{col_name}**: **${val:,.2f}**"
+                    if isinstance(val, (int, float))
+                    else f"- **{col_name}**: **{val}**"
+                )
             elif len(columns) >= 2:
                 # Grouped breakdown (e.g. Category, Revenue)
                 for r in rows[:8]:
                     dim_val = str(r[0])
                     metric_val = r[1]
                     if isinstance(metric_val, (int, float)):
-                        lines.append(f"- **{dim_val}**: ${metric_val:,.2f}" if "revenue" in columns[1].lower() or "profit" in columns[1].lower() else f"- **{dim_val}**: {metric_val:,}")
+                        lines.append(
+                            f"- **{dim_val}**: ${metric_val:,.2f}"
+                            if "revenue" in columns[1].lower() or "profit" in columns[1].lower()
+                            else f"- **{dim_val}**: {metric_val:,}"
+                        )
                     else:
                         lines.append(f"- **{dim_val}**: {metric_val}")
 
-            lines.append("\n**Visual Recommendation**: A bar or pie chart provides the clearest visual breakdown for this metric.")
+            lines.append(
+                "\n**Visual Recommendation**: A bar or pie chart provides the clearest visual breakdown for this metric."
+            )
 
             return LLMResponse(
                 content="\n".join(lines),
@@ -119,4 +130,3 @@ class MockProvider(BaseLLMProvider):
             provider="mock",
             model=self.model,
         )
-

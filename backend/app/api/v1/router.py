@@ -1,4 +1,5 @@
 """Root API v1 Router aggregating all endpoint routers."""
+
 from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
@@ -26,4 +27,3 @@ api_router.include_router(sqllab.router)
 api_router.include_router(uploads.router)
 api_router.include_router(ai.router)
 api_router.include_router(admin.router)
-

@@ -1,15 +1,17 @@
 """Dashboards API Endpoints."""
+
 import re
 import uuid
-from typing import Any, Dict, List
+from typing import Any
+
 from fastapi import APIRouter, Depends, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.v1.deps import get_db_session, require_permission
-from app.core.errors import NotFoundError, AppException
-from app.db.models import Chart, Dashboard, DashboardChart, DashboardFilter, User
+from app.core.errors import NotFoundError
+from app.db.models import Dashboard, DashboardChart, User
 from app.schemas.dashboard import (
     DashboardCreate,
     DashboardOut,
@@ -25,7 +27,7 @@ def generate_slug(title: str) -> str:
     return slug or f"dashboard-{uuid.uuid4().hex[:8]}"
 
 
-@router.get("/", response_model=List[DashboardOut])
+@router.get("/", response_model=list[DashboardOut])
 async def list_dashboards(
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_permission("dashboards:read")),
@@ -260,7 +262,7 @@ async def delete_dashboard(
     id: uuid.UUID,
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_permission("dashboards:write")),
-) -> Dict[str, str]:
+) -> dict[str, str]:
     """Delete a dashboard."""
     stmt = select(Dashboard).where(Dashboard.id == id, Dashboard.deleted_at.is_(None))
     result = await session.execute(stmt)

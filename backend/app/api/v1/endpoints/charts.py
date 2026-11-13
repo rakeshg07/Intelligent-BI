@@ -1,16 +1,16 @@
 """Charts API Endpoints."""
+
 import uuid
-import time
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 from fastapi import APIRouter, Depends, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.api.v1.deps import get_db_session, require_permission
 from app.connectors.factory import get_connector
-from app.core.errors import NotFoundError, AppException
-from app.db.models import Chart, Dataset, DatabaseConnection, Dashboard, DashboardChart, User
+from app.core.errors import NotFoundError
+from app.db.models import Chart, Dashboard, DashboardChart, DatabaseConnection, Dataset, User
 from app.query.cache import QueryResultCache, generate_query_cache_key
 from app.query.chart_query_builder import build_chart_sql
 from app.schemas.chart import (
@@ -24,17 +24,13 @@ from app.schemas.chart import (
 router = APIRouter(prefix="/charts", tags=["Charts"])
 
 
-@router.get("/", response_model=List[ChartOut])
+@router.get("/", response_model=list[ChartOut])
 async def list_charts(
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_permission("charts:read")),
 ) -> Any:
     """List all saved charts."""
-    stmt = (
-        select(Chart)
-        .where(Chart.deleted_at.is_(None))
-        .order_by(Chart.created_at.desc())
-    )
+    stmt = select(Chart).where(Chart.deleted_at.is_(None)).order_by(Chart.created_at.desc())
     result = await session.execute(stmt)
     charts = result.scalars().all()
     return [
@@ -80,13 +76,16 @@ async def create_chart(
     await session.flush()
 
     # Automatically add to targeted or matching dataset dashboard
-    target_dashboard: Optional[Dashboard] = None
+    target_dashboard: Dashboard | None = None
     if payload.dashboard_id:
         target_dashboard = await session.get(Dashboard, payload.dashboard_id)
     else:
         # Check if there is an existing dashboard for this dataset
         import re
-        table_slug = re.sub(r"[^a-zA-Z0-9_-]+", "-", (dataset.table_name or dataset.name).lower()).strip("-")
+
+        table_slug = re.sub(
+            r"[^a-zA-Z0-9_-]+", "-", (dataset.table_name or dataset.name).lower()
+        ).strip("-")
         slug = f"{table_slug}-overview"
         dash_res = await session.execute(
             select(Dashboard).where(Dashboard.slug == slug, Dashboard.deleted_at.is_(None))
@@ -216,7 +215,7 @@ async def delete_chart(
     id: uuid.UUID,
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_permission("charts:write")),
-) -> Dict[str, str]:
+) -> dict[str, str]:
     """Delete a chart."""
     stmt = select(Chart).where(Chart.id == id, Chart.deleted_at.is_(None))
     result = await session.execute(stmt)
@@ -236,7 +235,9 @@ async def get_chart_data(
     current_user: User = Depends(require_permission("charts:read")),
 ) -> Any:
     """Execute dynamic chart query and return rows, columns and duration."""
-    dataset_stmt = select(Dataset).where(Dataset.id == payload.dataset_id, Dataset.deleted_at.is_(None))
+    dataset_stmt = select(Dataset).where(
+        Dataset.id == payload.dataset_id, Dataset.deleted_at.is_(None)
+    )
     dataset_res = await session.execute(dataset_stmt)
     dataset = dataset_res.scalar_one_or_none()
     if not dataset:

@@ -1,11 +1,15 @@
 """Database Session Management and Engine Creation."""
-from typing import Any, AsyncGenerator
+
+from collections.abc import AsyncGenerator
+from typing import Any
+
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
+
 from app.core.config import settings
 
 # Engine configuration
@@ -19,11 +23,13 @@ if "sqlite" in settings.METADATA_DATABASE_URL:
     engine_kwargs["connect_args"] = {"check_same_thread": False}
 else:
     # PostgreSQL pool options
-    engine_kwargs.update({
-        "pool_size": 10,
-        "max_overflow": 20,
-        "pool_pre_ping": True,
-    })
+    engine_kwargs.update(
+        {
+            "pool_size": 10,
+            "max_overflow": 20,
+            "pool_pre_ping": True,
+        }
+    )
 
 async_engine: AsyncEngine = create_async_engine(
     settings.METADATA_DATABASE_URL,
@@ -46,4 +52,3 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             yield session
         finally:
             await session.close()
-

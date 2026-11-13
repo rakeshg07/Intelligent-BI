@@ -1,5 +1,7 @@
 """Database Initialization and Seed Data Provider."""
+
 import logging
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -84,9 +86,16 @@ async def init_system_data(session: AsyncSession) -> None:
     # Editor gets editing rights
     editor_role = role_map["Editor"]
     editor_perms = [
-        "databases:read", "datasets:read", "datasets:write",
-        "charts:read", "charts:write", "dashboards:read", "dashboards:write",
-        "sqllab:use", "uploads:use", "ai:use",
+        "databases:read",
+        "datasets:read",
+        "datasets:write",
+        "charts:read",
+        "charts:write",
+        "dashboards:read",
+        "dashboards:write",
+        "sqllab:use",
+        "uploads:use",
+        "ai:use",
     ]
     for code in editor_perms:
         perm_item = permission_map.get(code)
@@ -172,4 +181,3 @@ async def init_system_data(session: AsyncSession) -> None:
 
     await session.commit()
     logger.info("System data initialization complete.")
-

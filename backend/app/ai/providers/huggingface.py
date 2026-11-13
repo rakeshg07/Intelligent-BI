@@ -1,9 +1,10 @@
 """Hugging Face Inference API Provider (OpenAI-compatible /v1/chat/completions)."""
-from typing import Any, Dict, List, Optional
+
+from typing import Any
+
 from app.ai.providers.base import LLMMessage, LLMResponse
 from app.ai.providers.openai import OpenAIProvider
 from app.core.errors import AppException
-
 
 HUGGINGFACE_ROUTER_URL = "https://router.huggingface.co/v1/chat/completions"
 
@@ -25,8 +26,8 @@ class HuggingFaceProvider(OpenAIProvider):
 
     async def generate(
         self,
-        messages: List[LLMMessage],
-        tools: Optional[List[Dict[str, Any]]] = None,
+        messages: list[LLMMessage],
+        tools: list[dict[str, Any]] | None = None,
         temperature: float = 0.0,
     ) -> LLMResponse:
         if not self.api_key:
@@ -37,4 +38,3 @@ class HuggingFaceProvider(OpenAIProvider):
         resp = await super().generate(messages=messages, tools=tools, temperature=temperature)
         resp.provider = "huggingface"
         return resp
-

@@ -3,15 +3,12 @@
 Constructs safe SQL queries for charts from semantic datasets, dimensions,
 metrics, time grains, ad-hoc filters, and limits without raw string concatenation.
 """
+
 import re
-from typing import Any, Dict, List, Optional
-import sqlglot
-from sqlglot import exp
+from typing import Any
 
-from app.core.errors import AppException
-from app.db.models import Dataset, DatasetMetric
+from app.db.models import Dataset
 from app.query.validator import validate_and_format_sql
-
 
 TIME_GRAIN_MAP = {
     "day": "day",
@@ -24,13 +21,13 @@ TIME_GRAIN_MAP = {
 
 def build_chart_sql(
     dataset: Dataset,
-    dimensions: List[str],
-    metrics: List[Dict[str, Any]],
-    filters: Optional[List[Dict[str, Any]]] = None,
-    time_column: Optional[str] = None,
-    time_grain: Optional[str] = None,
-    time_range: Optional[Dict[str, str]] = None,
-    order_by: Optional[List[Dict[str, str]]] = None,
+    dimensions: list[str],
+    metrics: list[dict[str, Any]],
+    filters: list[dict[str, Any]] | None = None,
+    time_column: str | None = None,
+    time_grain: str | None = None,
+    time_range: dict[str, str] | None = None,
+    order_by: list[dict[str, str]] | None = None,
     row_limit: int = 1000,
     dialect: str = "duckdb",
 ) -> str:
@@ -44,8 +41,8 @@ def build_chart_sql(
         schema_prefix = f"{dataset.schema_name}." if dataset.schema_name else ""
         from_clause = f"{schema_prefix}{source_table}"
 
-    select_items: List[str] = []
-    group_by_items: List[str] = []
+    select_items: list[str] = []
+    group_by_items: list[str] = []
 
     # 1. Handle Time Dimension with grain
     if time_column and time_grain:
@@ -76,7 +73,7 @@ def build_chart_sql(
         select_items.append("*")
 
     # 4. Build WHERE clauses from filters
-    where_clauses: List[str] = []
+    where_clauses: list[str] = []
 
     # Time range filter
     if time_column and time_range:
@@ -157,4 +154,3 @@ def build_chart_sql(
         row_limit=row_limit,
     )
     return safe_sql
-

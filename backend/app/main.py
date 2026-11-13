@@ -1,7 +1,10 @@
 """Main FastAPI Application Entrypoint."""
+
 import uuid
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator
+from typing import Any
+
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
@@ -51,7 +54,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             pass
 
 
-
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
@@ -65,7 +67,9 @@ app = FastAPI(
 # CORS Configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS if isinstance(settings.CORS_ORIGINS, list) else [settings.CORS_ORIGINS],
+    allow_origins=settings.CORS_ORIGINS
+    if isinstance(settings.CORS_ORIGINS, list)
+    else [settings.CORS_ORIGINS],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -91,4 +95,3 @@ async def root() -> dict[str, Any]:
         "docs_url": "/docs",
         "api_v1": settings.API_V1_STR,
     }
-

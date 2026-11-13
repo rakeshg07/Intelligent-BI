@@ -1,6 +1,8 @@
 """OpenAI LLM Provider using direct HTTP API."""
+
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 import httpx
 
 from app.ai.providers.base import BaseLLMProvider, LLMMessage, LLMResponse, ToolCall
@@ -19,21 +21,23 @@ class OpenAIProvider(BaseLLMProvider):
 
     async def generate(
         self,
-        messages: List[LLMMessage],
-        tools: Optional[List[Dict[str, Any]]] = None,
+        messages: list[LLMMessage],
+        tools: list[dict[str, Any]] | None = None,
         temperature: float = 0.0,
     ) -> LLMResponse:
         if not self.api_key and "localhost" not in self.base_url:
-            raise AppException("OpenAI API key is not configured. Set OPENAI_API_KEY in settings or environment.")
+            raise AppException(
+                "OpenAI API key is not configured. Set OPENAI_API_KEY in settings or environment."
+            )
 
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
 
-        openai_messages: List[Dict[str, Any]] = []
+        openai_messages: list[dict[str, Any]] = []
         for m in messages:
-            msg_dict: Dict[str, Any] = {"role": m.role}
+            msg_dict: dict[str, Any] = {"role": m.role}
             if m.content is not None:
                 msg_dict["content"] = m.content
             if m.tool_call_id:
@@ -43,7 +47,7 @@ class OpenAIProvider(BaseLLMProvider):
             if m.tool_calls:
                 tc_list = []
                 for tc in m.tool_calls:
-                    tc_item: Dict[str, Any] = {
+                    tc_item: dict[str, Any] = {
                         "id": tc.id,
                         "type": "function",
                         "function": {
@@ -57,7 +61,7 @@ class OpenAIProvider(BaseLLMProvider):
                 msg_dict["tool_calls"] = tc_list
             openai_messages.append(msg_dict)
 
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "model": self.model,
             "messages": openai_messages,
             "temperature": temperature,
@@ -74,7 +78,7 @@ class OpenAIProvider(BaseLLMProvider):
         choice = data["choices"][0]
         msg = choice.get("message", {})
 
-        tool_calls: List[ToolCall] = []
+        tool_calls: list[ToolCall] = []
         for tc in msg.get("tool_calls", []):
             fn = tc.get("function", {})
             try:
@@ -97,4 +101,3 @@ class OpenAIProvider(BaseLLMProvider):
             provider="openai",
             model=self.model,
         )
-

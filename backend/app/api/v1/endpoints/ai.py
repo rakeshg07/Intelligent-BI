@@ -1,6 +1,8 @@
 """AI Assistant API Endpoints (ADR-004 & Phase 4)."""
-from typing import Any, Dict, List
+
 import uuid
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -64,7 +66,7 @@ async def chat_with_ai(
 async def verify_grounding(
     payload: AIVerifyRequest,
     current_user: User = Depends(require_permission("ai:use")),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Ad-hoc endpoint to verify numeric grounding of text against query rows."""
     res = GroundingGuardrail.verify(
         response_text=payload.text,
@@ -78,7 +80,7 @@ async def verify_grounding(
 async def list_conversations(
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_permission("ai:use")),
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """List recent AI conversations for current user."""
     stmt = (
         select(AIConversation)
@@ -104,7 +106,7 @@ async def get_conversation_messages(
     conversation_id: uuid.UUID,
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_permission("ai:use")),
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Get message history for an AI conversation thread."""
     stmt = (
         select(AIMessage)

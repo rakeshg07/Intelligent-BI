@@ -1,9 +1,10 @@
 """Groq LLM Provider using Groq's high-speed OpenAI-compatible API."""
-from typing import Any, Dict, List, Optional
+
+from typing import Any
+
 from app.ai.providers.base import LLMMessage, LLMResponse
 from app.ai.providers.openai import OpenAIProvider
 from app.core.errors import AppException
-
 
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
@@ -25,8 +26,8 @@ class GroqProvider(OpenAIProvider):
 
     async def generate(
         self,
-        messages: List[LLMMessage],
-        tools: Optional[List[Dict[str, Any]]] = None,
+        messages: list[LLMMessage],
+        tools: list[dict[str, Any]] | None = None,
         temperature: float = 0.0,
     ) -> LLMResponse:
         if not self.api_key:
@@ -35,4 +36,3 @@ class GroqProvider(OpenAIProvider):
         resp = await super().generate(messages=messages, tools=tools, temperature=temperature)
         resp.provider = "groq"
         return resp
-

@@ -1,14 +1,15 @@
 """Dataset Schemas."""
+
 import uuid
-from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel, Field
 
 
 class DatasetColumnBase(BaseModel):
     name: str
-    verbose_name: Optional[str] = None
+    verbose_name: str | None = None
     data_type: str
-    description: Optional[str] = None
+    description: str | None = None
     is_datetime: bool = False
     is_dimension: bool = True
     is_filterable: bool = True
@@ -25,11 +26,11 @@ class DatasetColumnOut(DatasetColumnBase):
 
 class DatasetMetricBase(BaseModel):
     name: str
-    verbose_name: Optional[str] = None
+    verbose_name: str | None = None
     sql_expression: str
     metric_type: str = "aggregate"
-    number_format: Optional[str] = None
-    description: Optional[str] = None
+    number_format: str | None = None
+    description: str | None = None
 
 
 class DatasetMetricOut(DatasetMetricBase):
@@ -42,7 +43,7 @@ class DatasetMetricOut(DatasetMetricBase):
 class RLSRuleBase(BaseModel):
     role_id: uuid.UUID
     clause: str
-    description: Optional[str] = None
+    description: str | None = None
     is_active: bool = True
 
 
@@ -55,35 +56,34 @@ class RLSRuleOut(RLSRuleBase):
 
 class DatasetCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=150)
-    description: Optional[str] = None
+    description: str | None = None
     database_id: uuid.UUID
-    schema_name: Optional[str] = None
-    table_name: Optional[str] = None
+    schema_name: str | None = None
+    table_name: str | None = None
     is_virtual: bool = False
-    sql_expression: Optional[str] = None
+    sql_expression: str | None = None
 
 
 class DatasetUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    schema_name: Optional[str] = None
-    table_name: Optional[str] = None
-    sql_expression: Optional[str] = None
+    name: str | None = None
+    description: str | None = None
+    schema_name: str | None = None
+    table_name: str | None = None
+    sql_expression: str | None = None
 
 
 class DatasetOut(BaseModel):
     id: uuid.UUID
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     database_id: uuid.UUID
-    database_name: Optional[str] = None
-    schema_name: Optional[str] = None
-    table_name: Optional[str] = None
+    database_name: str | None = None
+    schema_name: str | None = None
+    table_name: str | None = None
     is_virtual: bool
-    sql_expression: Optional[str] = None
-    columns: List[DatasetColumnOut] = []
-    metrics: List[DatasetMetricOut] = []
-    rls_rules: List[RLSRuleOut] = []
+    sql_expression: str | None = None
+    columns: list[DatasetColumnOut] = []
+    metrics: list[DatasetMetricOut] = []
+    rls_rules: list[RLSRuleOut] = []
 
     model_config = {"from_attributes": True}
-
