@@ -70,3 +70,19 @@ def test_build_chart_sql_virtual_dataset():
     assert "(SELECT id, amount, city FROM raw_orders WHERE active = 1)" in sql
     assert "city" in sql
     assert "LIMIT 20" in sql
+
+
+def test_build_chart_sql_hour_grain_and_quoted_columns(sample_dataset):
+    sql = build_chart_sql(
+        dataset=sample_dataset,
+        dimensions=["Department Name"],
+        metrics=[{"label": "Avg Salary ($)", "expression": "AVG(\"Annual Salary\")"}],
+        time_column="start_date",
+        time_grain="hour",
+        row_limit=50,
+        dialect="duckdb",
+    )
+    assert "date_trunc('hour', start_date)" in sql.lower()
+    assert '"Department Name"' in sql
+    assert 'AVG("Annual Salary")' in sql
+    assert "LIMIT 50" in sql

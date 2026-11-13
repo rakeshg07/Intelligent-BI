@@ -14,12 +14,40 @@ from app.query.validator import validate_and_format_sql
 
 
 TIME_GRAIN_MAP = {
+    "hour": "hour",
     "day": "day",
     "week": "week",
     "month": "month",
     "quarter": "quarter",
     "year": "year",
 }
+
+
+RESERVED_KEYWORDS = {
+    "select", "from", "where", "group", "order", "by", "limit", "as", "join",
+    "on", "in", "is", "not", "null", "and", "or", "case", "when", "then",
+    "else", "end", "table", "user", "primary", "foreign", "key", "check"
+}
+
+
+def quote_identifier(ident: str) -> str:
+    """Safely quote a SQL identifier (column/table) only when needed."""
+    cleaned = ident.strip()
+    if not cleaned or cleaned == "*":
+        return cleaned
+    if cleaned.startswith('"') and cleaned.endswith('"'):
+        return cleaned
+    if "(" in cleaned or " " in cleaned and any(kw in cleaned.upper() for kw in ("AS ", "OVER ", "CASE ", "THEN ", "ELSE ", "END")):
+        # It's an expression or complex clause, do not quote
+        return cleaned
+    if "." in cleaned:
+        parts = cleaned.split(".")
+        return ".".join(quote_identifier(p) for p in parts)
+    # If it's a standard alphanumeric identifier and not a reserved keyword, leave unquoted
+    if re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", cleaned) and cleaned.lower() not in RESERVED_KEYWORDS:
+        return cleaned
+    safe = cleaned.replace('"', '""')
+    return f'"{safe}"'
 
 
 def build_chart_sql(
@@ -41,8 +69,8 @@ def build_chart_sql(
     if dataset.is_virtual and dataset.sql_expression:
         from_clause = f"({dataset.sql_expression}) AS virtual_source"
     else:
-        schema_prefix = f"{dataset.schema_name}." if dataset.schema_name else ""
-        from_clause = f"{schema_prefix}{source_table}"
+        schema_prefix = f"{quote_identifier(dataset.schema_name)}." if dataset.schema_name else ""
+        from_clause = f"{schema_prefix}{quote_identifier(source_table)}"
 
     select_items: List[str] = []
     group_by_items: List[str] = []
@@ -50,18 +78,25 @@ def build_chart_sql(
     # 1. Handle Time Dimension with grain
     if time_column and time_grain:
         norm_grain = TIME_GRAIN_MAP.get(time_grain.lower(), "day")
-        time_expr = f"date_trunc('{norm_grain}', {time_column}) AS {time_column}_{norm_grain}"
+        time_col_quoted = quote_identifier(time_column)
+        clean_time_alias = re.sub(r"[^a-zA-Z0-9_]+", "_", str(time_column)).strip("_").lower() or "time_col"
+        alias = f"{clean_time_alias}_{norm_grain}"
+        time_expr = f"date_trunc('{norm_grain}', {time_col_quoted}) AS {quote_identifier(alias)}"
         select_items.append(time_expr)
-        group_by_items.append(f"{time_column}_{norm_grain}")
+        group_by_items.append(quote_identifier(alias))
     elif time_column:
-        select_items.append(time_column)
-        group_by_items.append(time_column)
+        time_col_quoted = quote_identifier(time_column)
+        select_items.append(time_col_quoted)
+        group_by_items.append(time_col_quoted)
 
     # 2. Add regular dimensions
     for dim in dimensions:
-        if dim not in select_items:
-            select_items.append(dim)
-            group_by_items.append(dim)
+        if not dim:
+            continue
+        dim_quoted = quote_identifier(dim)
+        if dim_quoted not in select_items and dim not in select_items:
+            select_items.append(dim_quoted)
+            group_by_items.append(dim_quoted)
 
     # 3. Add metrics (aggregations)
     for m in metrics:
@@ -69,7 +104,7 @@ def build_chart_sql(
         raw_label = m.get("name") or m.get("label") or "metric"
         clean_alias = re.sub(r"[^a-zA-Z0-9_]+", "_", str(raw_label)).strip("_").lower() or "metric"
         if expr:
-            select_items.append(f"{expr} AS {clean_alias}")
+            select_items.append(f"{expr} AS {quote_identifier(clean_alias)}")
 
     # Fallback if no select items
     if not select_items:
@@ -80,12 +115,13 @@ def build_chart_sql(
 
     # Time range filter
     if time_column and time_range:
+        time_col_quoted = quote_identifier(time_column)
         start_date = time_range.get("start")
         end_date = time_range.get("end")
         if start_date:
-            where_clauses.append(f"{time_column} >= '{start_date}'")
+            where_clauses.append(f"{time_col_quoted} >= '{start_date}'")
         if end_date:
-            where_clauses.append(f"{time_column} <= '{end_date}'")
+            where_clauses.append(f"{time_col_quoted} <= '{end_date}'")
 
     # Ad-hoc filters
     if filters:
@@ -97,30 +133,32 @@ def build_chart_sql(
             if not col:
                 continue
 
+            col_quoted = quote_identifier(col)
+
             if op in ("==", "="):
                 if isinstance(val, (int, float)):
-                    where_clauses.append(f"{col} = {val}")
+                    where_clauses.append(f"{col_quoted} = {val}")
                 else:
-                    where_clauses.append(f"{col} = '{val}'")
+                    where_clauses.append(f"{col_quoted} = '{val}'")
             elif op == "!=":
                 if isinstance(val, (int, float)):
-                    where_clauses.append(f"{col} != {val}")
+                    where_clauses.append(f"{col_quoted} != {val}")
                 else:
-                    where_clauses.append(f"{col} != '{val}'")
+                    where_clauses.append(f"{col_quoted} != '{val}'")
             elif op in (">", ">=", "<", "<="):
-                where_clauses.append(f"{col} {op} {val}")
+                where_clauses.append(f"{col_quoted} {op} {val}")
             elif op.upper() == "IN" and isinstance(val, list):
                 val_list = ", ".join(f"'{v}'" if isinstance(v, str) else str(v) for v in val)
-                where_clauses.append(f"{col} IN ({val_list})")
+                where_clauses.append(f"{col_quoted} IN ({val_list})")
             elif op.upper() == "NOT IN" and isinstance(val, list):
                 val_list = ", ".join(f"'{v}'" if isinstance(v, str) else str(v) for v in val)
-                where_clauses.append(f"{col} NOT IN ({val_list})")
+                where_clauses.append(f"{col_quoted} NOT IN ({val_list})")
             elif op.upper() == "LIKE":
-                where_clauses.append(f"{col} LIKE '{val}'")
+                where_clauses.append(f"{col_quoted} LIKE '{val}'")
             elif op.upper() == "IS NULL":
-                where_clauses.append(f"{col} IS NULL")
+                where_clauses.append(f"{col_quoted} IS NULL")
             elif op.upper() == "IS NOT NULL":
-                where_clauses.append(f"{col} IS NOT NULL")
+                where_clauses.append(f"{col_quoted} IS NOT NULL")
 
     # 5. Assemble SQL string
     query_parts = [f"SELECT {', '.join(select_items)}", f"FROM {from_clause}"]
@@ -134,7 +172,7 @@ def build_chart_sql(
     # 6. ORDER BY
     if order_by:
         order_clauses = [
-            f"{o.get('col', '1')} {o.get('direction', 'ASC').upper()}"
+            f"{quote_identifier(o.get('col', '1')) if not o.get('col', '1').isdigit() else o.get('col', '1')} {o.get('direction', 'ASC').upper()}"
             for o in order_by
             if o.get("col")
         ]
@@ -145,7 +183,7 @@ def build_chart_sql(
         first_metric = metrics[0]
         raw_label = first_metric.get("name") or first_metric.get("label") or "metric"
         clean_alias = re.sub(r"[^a-zA-Z0-9_]+", "_", str(raw_label)).strip("_").lower() or "metric"
-        query_parts.append(f"ORDER BY {clean_alias} DESC")
+        query_parts.append(f"ORDER BY {quote_identifier(clean_alias)} DESC")
 
     raw_sql = " ".join(query_parts)
 

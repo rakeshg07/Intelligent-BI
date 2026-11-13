@@ -9,8 +9,13 @@ from sqlalchemy.orm import selectinload
 
 from app.api.v1.deps import get_db_session, require_permission
 from app.connectors.factory import get_connector
+<<<<<<< HEAD
+from app.core.errors import NotFoundError, AppException, ValidationError
+from app.db.models import Chart, Dataset, DatabaseConnection, User
+=======
 from app.core.errors import NotFoundError, AppException
 from app.db.models import Chart, Dataset, DatabaseConnection, Dashboard, DashboardChart, User
+>>>>>>> upstream/main
 from app.query.cache import QueryResultCache, generate_query_cache_key
 from app.query.chart_query_builder import build_chart_sql
 from app.schemas.chart import (
@@ -236,29 +241,58 @@ async def get_chart_data(
     current_user: User = Depends(require_permission("charts:read")),
 ) -> Any:
     """Execute dynamic chart query and return rows, columns and duration."""
-    dataset_stmt = select(Dataset).where(Dataset.id == payload.dataset_id, Dataset.deleted_at.is_(None))
+    dataset_stmt = (
+        select(Dataset)
+        .options(selectinload(Dataset.columns), selectinload(Dataset.metrics))
+        .where(Dataset.id == payload.dataset_id, Dataset.deleted_at.is_(None))
+    )
     dataset_res = await session.execute(dataset_stmt)
     dataset = dataset_res.scalar_one_or_none()
     if not dataset:
         raise NotFoundError("Dataset not found.")
+
+    # Validate Time Column to prevent DuckDB Binder Error on numeric/invalid columns
+    if payload.time_column:
+        matching_col = next(
+            (c for c in dataset.columns if c.name.lower() == payload.time_column.lower()),
+            None
+        )
+        if not matching_col:
+            raise ValidationError(
+                f"Time column '{payload.time_column}' does not exist in dataset '{dataset.name}'."
+            )
+        col_type = (matching_col.data_type or "").upper()
+        # Verify valid date/time types
+        is_valid_temporal = (
+            matching_col.is_datetime
+            or any(t in col_type for t in ("DATE", "TIME", "TIMESTAMP", "TIMESTAMPTZ"))
+        )
+        if not is_valid_temporal:
+            raise ValidationError(
+                f"Column '{payload.time_column}' has type '{matching_col.data_type}' and cannot be used as a Time Column. "
+                "Only DATE, TIMESTAMP, or temporal columns are supported for time-based aggregation."
+            )
 
     db_conn = await session.get(DatabaseConnection, dataset.database_id)
     if not db_conn or db_conn.deleted_at is not None:
         raise NotFoundError("Database connection not found.")
 
     dialect = db_conn.dialect.lower()
-    sql = build_chart_sql(
-        dataset=dataset,
-        dimensions=payload.dimensions,
-        metrics=payload.metrics,
-        filters=payload.filters,
-        time_column=payload.time_column,
-        time_grain=payload.time_grain,
-        time_range=payload.time_range,
-        order_by=payload.order_by,
-        row_limit=payload.row_limit,
-        dialect=dialect,
-    )
+    try:
+        sql = build_chart_sql(
+            dataset=dataset,
+            dimensions=payload.dimensions,
+            metrics=payload.metrics,
+            filters=payload.filters,
+            time_column=payload.time_column,
+            time_grain=payload.time_grain,
+            time_range=payload.time_range,
+            order_by=payload.order_by,
+            row_limit=payload.row_limit,
+            dialect=dialect,
+        )
+    except Exception as e:
+        raise ValidationError(f"Failed to generate SQL for chart: {str(e)}")
 
     cache_key = generate_query_cache_key(sql, str(dataset.id))
     cached = QueryResultCache.get(cache_key)
@@ -266,7 +300,16 @@ async def get_chart_data(
         return ChartDataResponse(**cached)
 
     connector = get_connector(db_conn)
-    query_res = connector.execute_query(sql, limit=payload.row_limit)
+    try:
+        query_res = connector.execute_query(sql, limit=payload.row_limit)
+    except AppException:
+        raise
+    except Exception as e:
+        raise AppException(
+            f"Query execution failed: {str(e)}",
+            code="QUERY_EXECUTION_ERROR",
+            status_code=400,
+        )
 
     resp_data = {
         "columns": query_res.columns,
