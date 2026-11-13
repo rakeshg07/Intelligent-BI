@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import {
@@ -16,11 +16,7 @@ import {
 } from "lucide-react";
 import { api, ChartItem, DatasetItem, ChartDataResponse } from "@/app/api";
 import { chartRegistry, ChartPlugin } from "@/charts";
-<<<<<<< HEAD
-import { isTemporalColumn, isNumericColumn } from "./utils";
-=======
 import { AIDrawer } from "@/features/ai/AIDrawer";
->>>>>>> upstream/main
 
 export const ChartsPage: React.FC = () => {
   const queryClient = useQueryClient();
@@ -62,218 +58,160 @@ export const ChartsPage: React.FC = () => {
   // Explore Builder State
   const [selectedDatasetId, setSelectedDatasetId] = useState<string>("");
   const [selectedVizType, setSelectedVizType] = useState<string>("bar");
-
-  // X-Axis (Dimension / Category)
   const [selectedDimension, setSelectedDimension] = useState<string>("");
   const [selectedDimensions, setSelectedDimensions] = useState<string[]>([]);
-
-  // Y-Axis (Metric / Measure & Aggregation)
-  const [primaryMetricCol, setPrimaryMetricCol] = useState<string>("count");
-  const [primaryMetricAgg, setPrimaryMetricAgg] = useState<string>("SUM");
-  const [additionalMetrics, setAdditionalMetrics] = useState<any[]>([]);
-
-  // Temporal Axis
+  const [selectedMetrics, setSelectedMetrics] = useState<any[]>([]);
   const [timeColumn, setTimeColumn] = useState<string>("");
   const [timeGrain, setTimeGrain] = useState<string>("month");
-
-  // Chart Options & Limits
   const [chartOptions, setChartOptions] = useState<Record<string, any>>({});
   const [rowLimit, setRowLimit] = useState<number>(100);
 
-  // Filters state
+  // Filters & ad-hoc metrics state
   const [filters, setFilters] = useState<any[]>([]);
   const [newFilterCol, setNewFilterCol] = useState<string>("");
   const [newFilterOp, setNewFilterOp] = useState<string>("==");
   const [newFilterVal, setNewFilterVal] = useState<string>("");
+  const [newMetricAgg, setNewMetricAgg] = useState<string>("SUM");
+  const [newMetricCol, setNewMetricCol] = useState<string>("");
 
-  // Query Execution State
+  // Query Result & View State
   const [chartData, setChartData] = useState<ChartDataResponse | null>(null);
-  const [queryError, setQueryError] = useState<string | null>(null);
   const [activeViewTab, setActiveViewTab] = useState<"chart" | "data" | "sql">("chart");
-  const queryRequestIdRef = useRef<number>(0);
-
-  // Save Modal State
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [chartTitle, setChartTitle] = useState("");
   const [chartDescription, setChartDescription] = useState("");
   const [targetDashboardId, setTargetDashboardId] = useState<string>("auto");
   const [isDatasetAIDrawerOpen, setIsDatasetAIDrawerOpen] = useState(false);
 
-  // Resolved Dataset & Columns
-  const currentDataset = useMemo(() => {
-    return selectedDatasetId
-      ? datasetList.find((d: DatasetItem) => d.id === selectedDatasetId)
-      : datasetList[0];
-  }, [datasetList, selectedDatasetId]);
+  // Handle URL param ?dataset=...
+  useEffect(() => {
+    const datasetParam = searchParams.get("dataset");
+    if (datasetParam) {
+      setSelectedDatasetId(datasetParam);
+      setChartData(null);
+      setSelectedDimension("");
+      setSelectedDimensions([]);
+      setTimeColumn("");
+      setSelectedMetrics([]);
+      setMode("explore");
+    }
+  }, [searchParams]);
 
-  const currentColumns: any[] = useMemo(() => currentDataset?.columns || [], [currentDataset]);
-  const currentPredefinedMetrics: any[] = useMemo(() => currentDataset?.metrics || [], [currentDataset]);
+  // Handle default dataset and initial selections (avoid falling back to datasetList[0] while a specific ID is loading)
+  const currentDataset = selectedDatasetId
+    ? datasetList.find((d: DatasetItem) => d.id === selectedDatasetId)
+    : datasetList[0];
+  const currentColumns: any[] = currentDataset?.columns || [];
+  const currentMetrics: any[] = currentDataset?.metrics || [];
 
-  // Validated column subsets by type
-  const validTimeColumns = useMemo(() => currentColumns.filter(isTemporalColumn), [currentColumns]);
-  const numericColumns = useMemo(() => currentColumns.filter(isNumericColumn), [currentColumns]);
-  const dimensionColumns = useMemo(
-    () => currentColumns.filter((c) => c.is_dimension || !isTemporalColumn(c)),
-    [currentColumns]
-  );
-
-  // Sync initial dataset ID
   useEffect(() => {
     if (datasetList.length > 0 && !selectedDatasetId) {
       setSelectedDatasetId(datasetList[0].id);
     }
   }, [datasetList, selectedDatasetId]);
 
-  // Handle URL param ?dataset=...
   useEffect(() => {
-    const datasetParam = searchParams.get("dataset");
-    if (datasetParam && datasetList.length > 0) {
-      const match = datasetList.find((d) => d.id === datasetParam);
-      if (match) {
-        handleDatasetChange(match.id);
-        setMode("explore");
-      }
-    }
-  }, [searchParams, datasetList]);
-
-  // Helper to compute initial sensible defaults for a dataset
-  const initializeDatasetSelections = useCallback(
-    (ds: DatasetItem) => {
-      const cols: any[] = ds.columns || [];
-      const timeCols = cols.filter(isTemporalColumn);
-      const numCols = cols.filter(isNumericColumn);
-
-      // Best dimension: categorical column (not email, mobile, id)
-      const bestDim =
+    if (currentDataset) {
+      const cols: any[] = currentDataset.columns || [];
+      // Pick best dimension column: prefer categorical columns like college_name, branch, status
+      const dimCol =
         cols.find((c) => {
           const n = (c.column_name || c.name || "").toLowerCase();
           return (
-            (c.is_dimension || !isTemporalColumn(c)) &&
-            !isNumericColumn(c) &&
-            (n.includes("dept") ||
+            c.is_dimension &&
+            !c.is_datetime &&
+            (n.includes("college") ||
+              n.includes("dept") ||
+              n.includes("status") ||
               n.includes("category") ||
-              n.includes("country") ||
-              n.includes("gender") ||
-              n.includes("region") ||
-              n.includes("status"))
+              n.includes("group") ||
+              n.includes("branch"))
           );
         }) ||
-        cols.find((c) => !isTemporalColumn(c) && !isNumericColumn(c)) ||
+        cols.find((c) => {
+          const n = (c.column_name || c.name || "").toLowerCase();
+          return (
+            c.is_dimension &&
+            !c.is_datetime &&
+            !n.includes("email") &&
+            !n.includes("mobile") &&
+            !n.includes("phone") &&
+            !n.includes("id")
+          );
+        }) ||
+        cols.find((c) => c.is_dimension && !c.is_datetime) ||
         cols[0];
 
-      const bestDimName = bestDim ? bestDim.column_name || bestDim.name : "";
-      setSelectedDimension(bestDimName);
-      setSelectedDimensions(bestDimName ? [bestDimName] : []);
-
-      // Time column: default to first valid temporal column only
-      if (timeCols.length > 0) {
-        const dtCol = timeCols[0];
-        setTimeColumn(dtCol.column_name || dtCol.name);
-      } else {
-        setTimeColumn("");
+      if (dimCol && !selectedDimension) {
+        const cName = dimCol.column_name || dimCol.name;
+        setSelectedDimension(cName);
+        setSelectedDimensions([cName]);
       }
 
-      // Metric: if numeric columns exist, pick the first one
-      if (numCols.length > 0) {
-        const firstNum = numCols[0];
-        const numName = firstNum.column_name || firstNum.name;
-        setPrimaryMetricCol(numName);
-        setPrimaryMetricAgg("AVG");
-      } else if (ds.metrics && ds.metrics.length > 0) {
-        const firstM = ds.metrics[0];
-        setPrimaryMetricCol(firstM.metric_name || (firstM as any).name);
-        setPrimaryMetricAgg("SUM");
-      } else {
-        setPrimaryMetricCol("count");
-        setPrimaryMetricAgg("COUNT");
+      // Pick first datetime column
+      const dtCol = cols.find((c) => c.is_datetime);
+      if (dtCol && !timeColumn) {
+        const dtName = dtCol.column_name || dtCol.name;
+        setTimeColumn(dtName);
       }
 
-      setAdditionalMetrics([]);
-      setFilters([]);
-      setChartData(null);
-      setQueryError(null);
-    },
-    []
-  );
-
-  // Explicit dataset change handler
-  const handleDatasetChange = (newDatasetId: string) => {
-    setSelectedDatasetId(newDatasetId);
-    setChartData(null);
-    setQueryError(null);
-    const newDs = datasetList.find((d) => d.id === newDatasetId);
-    if (newDs) {
-      initializeDatasetSelections(newDs);
-    }
-  };
-
-  // Build active metrics payload
-  const activeMetrics = useMemo(() => {
-    const list: any[] = [];
-    if (primaryMetricCol === "count" || !primaryMetricCol) {
-      list.push({ name: "count", label: "Count of Rows", expression: "COUNT(*)" });
-    } else {
-      // Check if primaryMetricCol matches a predefined dataset metric
-      const predefined = currentPredefinedMetrics.find(
-        (m) => (m.metric_name || (m as any).name) === primaryMetricCol
-      );
-      if (predefined) {
-        list.push({
-          name: predefined.metric_name || (predefined as any).name,
-          label: predefined.verbose_name || predefined.metric_name || (predefined as any).name,
-          expression: predefined.sql_expression,
-        });
-      } else {
-        const agg = primaryMetricAgg.toUpperCase();
-        const expr =
-          agg === "COUNT_DISTINCT"
-            ? `COUNT(DISTINCT "${primaryMetricCol}")`
-            : `${agg}("${primaryMetricCol}")`;
-        const mName = `${agg.toLowerCase()}_${primaryMetricCol}`;
-        const label = `${agg}(${primaryMetricCol})`;
-        list.push({ name: mName, label, expression: expr, column: primaryMetricCol, agg });
+      // Pick first metric
+      if (selectedMetrics.length === 0) {
+        const metrics: any[] = currentDataset.metrics || [];
+        if (metrics.length > 0) {
+          const firstM = metrics[0];
+          const mName = firstM.metric_name || firstM.name;
+          setSelectedMetrics([
+            {
+              name: mName,
+              label: firstM.verbose_name || mName,
+              expression: firstM.sql_expression,
+            },
+          ]);
+        } else {
+          // Default COUNT(*)
+          setSelectedMetrics([{ name: "count", label: "Count of Rows", expression: "COUNT(*)" }]);
+        }
       }
     }
+  }, [currentDataset]);
 
-    // Append any additional metrics
-    for (const extra of additionalMetrics) {
-      if (!list.some((m) => m.name === extra.name || m.expression === extra.expression)) {
-        list.push(extra);
-      }
+  // Auto-run query when explore mode loads with a dataset and initial dimension
+  const hasAutoRunRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (
+      mode === "explore" &&
+      selectedDatasetId &&
+      currentDataset &&
+      selectedDimension &&
+      hasAutoRunRef.current !== `${selectedDatasetId}_${selectedDimension}`
+    ) {
+      hasAutoRunRef.current = `${selectedDatasetId}_${selectedDimension}`;
+      runQueryMutation.mutate();
     }
-    return list;
-  }, [primaryMetricCol, primaryMetricAgg, additionalMetrics, currentPredefinedMetrics]);
+  }, [mode, selectedDatasetId, currentDataset, selectedDimension]);
 
   // Execute chart query mutation
   const runQueryMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: () => {
       if (!selectedDatasetId) throw new Error("Please select a dataset.");
       const plugin = chartRegistry.get(selectedVizType);
       const isMultiDim = plugin?.controlPanel.dimensions.multi;
 
-      let dims: string[] = isMultiDim
-        ? selectedDimensions
-        : selectedDimension
-        ? [selectedDimension]
-        : [];
-
-      // For big_number KPI, dimensions are not required
-      if (selectedVizType === "big_number") {
-        dims = [];
-      } else if (dims.length === 0 && !timeColumn) {
-        // Fallback to first available dimension
-        const fallbackCol = dimensionColumns[0] || currentColumns[0];
+      let dims: string[] = isMultiDim ? selectedDimensions : selectedDimension ? [selectedDimension] : [];
+      // Safety fallback: if chart requires a dimension and dims is empty, pick first dimension column
+      if (dims.length === 0 && selectedVizType !== "big_number") {
+        const fallbackCol = currentColumns.find((c) => c.is_dimension && !c.is_datetime) || currentColumns[0];
         if (fallbackCol) {
-          dims = [fallbackCol.column_name || fallbackCol.name];
+          const fbName = fallbackCol.column_name || fallbackCol.name;
+          dims = [fbName];
         }
       }
 
-      // Enforce valid time column: only pass if valid in dataset
-      const safeTimeCol = validTimeColumns.some(
-        (c) => (c.column_name || c.name) === timeColumn
-      )
-        ? timeColumn
-        : undefined;
+      const activeMetrics =
+        selectedMetrics.length > 0
+          ? selectedMetrics
+          : [{ name: "count", label: "Count of Rows", expression: "COUNT(*)" }];
 
       const payload = {
         dataset_id: selectedDatasetId,
@@ -281,71 +219,16 @@ export const ChartsPage: React.FC = () => {
         dimensions: dims,
         metrics: activeMetrics,
         filters,
-        time_column: safeTimeCol,
-        time_grain: safeTimeCol ? timeGrain : undefined,
+        time_column: timeColumn || undefined,
+        time_grain: timeGrain || undefined,
         row_limit: rowLimit,
       };
-
-      const thisRequestId = ++queryRequestIdRef.current;
-      const result = await api.getChartData(payload);
-      return { result, requestId: thisRequestId };
+      return api.getChartData(payload);
     },
-    onMutate: () => {
-      // Clear previous error on new execution
-      setQueryError(null);
-    },
-    onSuccess: ({ result, requestId }) => {
-      // Prevent stale asynchronous responses from overwriting newer query results
-      if (requestId === queryRequestIdRef.current) {
-        setChartData(result);
-        setQueryError(null);
-      }
-    },
-    onError: (err: any) => {
-      // On failure: do NOT represent stale chart data as new results
-      setChartData(null);
-      setQueryError(err?.message || "Query execution failed. Please verify axis configuration.");
+    onSuccess: (data) => {
+      setChartData(data);
     },
   });
-
-  // Auto-run query when explore mode loads or critical axes change
-  const lastQueryKeyRef = useRef<string>("");
-  useEffect(() => {
-    if (mode !== "explore" || !selectedDatasetId || !currentDataset) return;
-
-    const currentKey = JSON.stringify({
-      ds: selectedDatasetId,
-      viz: selectedVizType,
-      dim: selectedDimension,
-      dims: selectedDimensions,
-      mCol: primaryMetricCol,
-      mAgg: primaryMetricAgg,
-      addM: additionalMetrics,
-      tc: timeColumn,
-      tg: timeGrain,
-      f: filters,
-      lim: rowLimit,
-    });
-
-    if (lastQueryKeyRef.current !== currentKey) {
-      lastQueryKeyRef.current = currentKey;
-      runQueryMutation.mutate();
-    }
-  }, [
-    mode,
-    selectedDatasetId,
-    currentDataset,
-    selectedVizType,
-    selectedDimension,
-    selectedDimensions,
-    primaryMetricCol,
-    primaryMetricAgg,
-    additionalMetrics,
-    timeColumn,
-    timeGrain,
-    filters,
-    rowLimit,
-  ]);
 
   // Save chart mutation
   const saveChartMutation = useMutation({
@@ -359,10 +242,7 @@ export const ChartsPage: React.FC = () => {
         params: {
           dimension: selectedDimension,
           dimensions: selectedDimensions,
-          primary_metric_col: primaryMetricCol,
-          primary_metric_agg: primaryMetricAgg,
-          metrics: activeMetrics,
-          additional_metrics: additionalMetrics,
+          metrics: selectedMetrics,
           time_column: timeColumn,
           time_grain: timeGrain,
           options: chartOptions,
@@ -402,44 +282,28 @@ export const ChartsPage: React.FC = () => {
       setSelectedDatasetId(chartToEdit.dataset_id);
       setSelectedVizType(chartToEdit.viz_type);
       const p = chartToEdit.params || {};
-
       setSelectedDimension(p.dimension || "");
-      setSelectedDimensions(p.dimensions || (p.dimension ? [p.dimension] : []));
-
-      if (p.primary_metric_col) {
-        setPrimaryMetricCol(p.primary_metric_col);
-        setPrimaryMetricAgg(p.primary_metric_agg || "SUM");
-      } else if (p.metrics && p.metrics.length > 0) {
-        const firstM = p.metrics[0];
-        setPrimaryMetricCol(firstM.column || firstM.name || "count");
-        setPrimaryMetricAgg(firstM.agg || "SUM");
-      } else {
-        setPrimaryMetricCol("count");
-        setPrimaryMetricAgg("SUM");
-      }
-
-      setAdditionalMetrics(p.additional_metrics || []);
+      setSelectedDimensions(p.dimensions || []);
+      setSelectedMetrics(p.metrics || []);
       setTimeColumn(p.time_column || "");
       setTimeGrain(p.time_grain || "month");
       setChartOptions(p.options || {});
       setFilters(p.filters || []);
       setRowLimit(p.row_limit || 100);
-      setChartData(null);
-      setQueryError(null);
     } else {
       setEditingChartId(null);
       setChartTitle("New Chart");
       setChartDescription("");
-      if (currentDataset) {
-        initializeDatasetSelections(currentDataset);
-      }
     }
     setMode("explore");
   };
 
   const handleAddFilter = () => {
     if (!newFilterCol) return;
-    setFilters([...filters, { col: newFilterCol, op: newFilterOp, val: newFilterVal }]);
+    setFilters([
+      ...filters,
+      { col: newFilterCol, op: newFilterOp, val: newFilterVal },
+    ]);
     setNewFilterCol("");
     setNewFilterVal("");
   };
@@ -448,20 +312,34 @@ export const ChartsPage: React.FC = () => {
     setFilters(filters.filter((_, idx) => idx !== index));
   };
 
+  const handleAddAdhocMetric = () => {
+    if (!newMetricCol) return;
+    const agg = newMetricAgg.toUpperCase();
+    const expression = agg === "COUNT_DISTINCT" ? `COUNT(DISTINCT ${newMetricCol})` : `${agg}(${newMetricCol})`;
+    const metricName = `${agg.toLowerCase()}_${newMetricCol}`;
+    const label = agg === "COUNT_DISTINCT" ? `COUNT(DISTINCT ${newMetricCol})` : `${agg}(${newMetricCol})`;
+
+    if (!selectedMetrics.some((sm) => sm.name === metricName)) {
+      setSelectedMetrics([...selectedMetrics, { name: metricName, label, expression }]);
+    }
+    setNewMetricCol("");
+  };
+
   // Render chart using Plugin Registry
   const plugin: ChartPlugin | undefined = chartRegistry.get(selectedVizType);
-  const chartProps = plugin && chartData ? plugin.transformProps(chartData, chartOptions) : null;
+  const chartProps =
+    plugin && chartData ? plugin.transformProps(chartData, chartOptions) : null;
 
   return (
     <div className="space-y-6">
-      {/* ==================== LIST MODE VIEW ==================== */}
+      {/* List Mode View */}
       {mode === "list" && (
         <div className="space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <h1 className="text-2xl font-bold tracking-tight text-slate-900">Charts</h1>
               <p className="text-sm text-slate-500">
-                Explore datasets, configure dynamic dimensions & metrics, and assemble ECharts visualizations.
+                Explore datasets and assemble visualizations with Apache ECharts.
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -482,7 +360,7 @@ export const ChartsPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Dataset Filter Dropdown */}
+          {/* Dataset Filter Dropdown (Image 1 Feature on Charts List Page) */}
           <div className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
             <div className="flex items-center gap-3">
               <label className="text-xs font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">
@@ -523,80 +401,80 @@ export const ChartsPage: React.FC = () => {
                 listDatasetFilter === "all" ? true : chart.dataset_id === listDatasetFilter
               )
               .map((chart: ChartItem) => {
-                const ds = datasetList.find((d: DatasetItem) => d.id === chart.dataset_id);
-                return (
-                  <div
-                    key={chart.id}
-                    className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:shadow-md transition flex flex-col justify-between"
-                  >
-                    <div>
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2.5 bg-blue-50 text-blue-600 rounded-lg">
-                            <BarChart3 className="w-5 h-5" />
-                          </div>
-                          <div>
-                            <h3 className="font-semibold text-slate-900 text-sm">{chart.title}</h3>
-                            <span className="inline-block px-2 py-0.5 text-[10px] uppercase font-bold tracking-wider bg-slate-100 text-slate-700 rounded mt-0.5">
-                              {chart.viz_type}
-                            </span>
-                          </div>
+              const ds = datasetList.find((d: DatasetItem) => d.id === chart.dataset_id);
+              return (
+                <div
+                  key={chart.id}
+                  className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:shadow-md transition flex flex-col justify-between"
+                >
+                  <div>
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2.5 bg-blue-50 text-blue-600 rounded-lg">
+                          <BarChart3 className="w-5 h-5" />
                         </div>
-                        <button
-                          onClick={() => {
-                            if (confirm(`Delete chart '${chart.title}'?`)) {
-                              deleteChartMutation.mutate(chart.id);
-                            }
-                          }}
-                          className="text-slate-400 hover:text-red-600 transition p-1"
-                          title="Delete chart"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-
-                      {chart.description && (
-                        <p className="text-xs text-slate-500 mt-2 line-clamp-2">{chart.description}</p>
-                      )}
-
-                      <div className="mt-4 pt-3 border-t border-slate-100 space-y-1 text-xs text-slate-600">
-                        <div className="flex justify-between">
-                          <span className="text-slate-400">Dataset:</span>
-                          <span className="font-medium text-slate-800 truncate max-w-[180px]">
-                            {ds?.name || "Dataset"}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-400">Created:</span>
-                          <span className="text-slate-600">
-                            {chart.created_at ? new Date(chart.created_at).toLocaleDateString() : "—"}
+                        <div>
+                          <h3 className="font-semibold text-slate-900 text-sm">{chart.title}</h3>
+                          <span className="inline-block px-2 py-0.5 text-[10px] uppercase font-bold tracking-wider bg-slate-100 text-slate-700 rounded mt-0.5">
+                            {chart.viz_type}
                           </span>
                         </div>
                       </div>
-                    </div>
-
-                    <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
                       <button
-                        onClick={() => handleOpenExplore(chart)}
-                        className="px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded flex items-center gap-1.5 transition"
+                        onClick={() => {
+                          if (confirm(`Delete chart '${chart.title}'?`)) {
+                            deleteChartMutation.mutate(chart.id);
+                          }
+                        }}
+                        className="text-slate-400 hover:text-red-600 transition p-1"
+                        title="Delete chart"
                       >
-                        <Edit2 className="w-3.5 h-3.5" />
-                        Explore / Edit
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
+
+                    {chart.description && (
+                      <p className="text-xs text-slate-500 mt-2 line-clamp-2">{chart.description}</p>
+                    )}
+
+                    <div className="mt-4 pt-3 border-t border-slate-100 space-y-1 text-xs text-slate-600">
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Dataset:</span>
+                        <span className="font-medium text-slate-800 truncate max-w-[180px]">
+                          {ds?.name || "Dataset"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Created:</span>
+                        <span className="text-slate-600">
+                          {chart.created_at ? new Date(chart.created_at).toLocaleDateString() : "—"}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                );
-              })}
+
+                  <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+                    <button
+                      onClick={() => handleOpenExplore(chart)}
+                      className="px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded flex items-center gap-1.5 transition"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                      Explore / Edit
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
-          {chartList.length === 0 && (
+          {charts.length === 0 && (
             <div className="rounded-xl border border-slate-200 bg-white p-12 text-center space-y-3">
               <div className="inline-flex p-3 rounded-full bg-blue-50 text-blue-600">
                 <BarChart3 className="w-6 h-6" />
               </div>
               <h3 className="text-sm font-semibold text-slate-900">No Charts Created Yet</h3>
               <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                Explore connected datasets, choose from Apache ECharts visualizations, and save charts to assemble dashboards.
+                Explore your connected datasets, choose from Tier 1 Apache ECharts visualizations, and save charts to assemble dashboards.
               </p>
               <button
                 onClick={() => handleOpenExplore()}
@@ -610,7 +488,7 @@ export const ChartsPage: React.FC = () => {
         </div>
       )}
 
-      {/* ==================== EXPLORE MODE VIEW ==================== */}
+      {/* Explore Mode View */}
       {mode === "explore" && (
         <div className="flex flex-col h-[calc(100vh-4rem)] -m-6 overflow-hidden bg-slate-50">
           {/* Top Navbar */}
@@ -633,7 +511,7 @@ export const ChartsPage: React.FC = () => {
                   {chartTitle || "Explore Chart"}
                 </h2>
                 <p className="text-[11px] text-slate-400">
-                  Dataset: {currentDataset?.name || "None"} ({currentColumns.length} columns)
+                  Dataset: {currentDataset?.name || "None"}
                 </p>
               </div>
             </div>
@@ -667,19 +545,26 @@ export const ChartsPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Main Explore Layout: Controls Sidebar on Left, Visualization Canvas on Right */}
+          {/* Main Explore Layout: Controls Sidebar on Left, Visualization on Right */}
           <div className="flex-1 flex overflow-hidden">
             {/* Left Controls Sidebar */}
-            <div className="w-84 border-r border-slate-200 bg-white overflow-y-auto p-4 space-y-5 flex-shrink-0">
-              {/* 1. Dataset Selection */}
+            <div className="w-80 border-r border-slate-200 bg-white overflow-y-auto p-4 space-y-5 flex-shrink-0">
+              {/* Dataset Selection */}
               <div>
-                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
                   Dataset
                 </label>
                 <select
                   value={selectedDatasetId}
-                  onChange={(e) => handleDatasetChange(e.target.value)}
-                  className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded font-medium focus:ring-2 focus:ring-blue-500 bg-white shadow-sm"
+                  onChange={(e) => {
+                    setSelectedDatasetId(e.target.value);
+                    setChartData(null);
+                    setSelectedDimension("");
+                    setSelectedDimensions([]);
+                    setTimeColumn("");
+                    setSelectedMetrics([]);
+                  }}
+                  className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded font-medium focus:ring-1 focus:ring-blue-500 bg-white"
                 >
                   {datasetList.map((d: DatasetItem) => (
                     <option key={d.id} value={d.id}>
@@ -689,9 +574,9 @@ export const ChartsPage: React.FC = () => {
                 </select>
               </div>
 
-              {/* 2. Visualization Type Picker */}
+              {/* Chart Type Picker */}
               <div>
-                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
                   Visualization Type
                 </label>
                 <div className="grid grid-cols-2 gap-1.5">
@@ -701,39 +586,70 @@ export const ChartsPage: React.FC = () => {
                       onClick={() => setSelectedVizType(meta.id)}
                       className={`px-2 py-1.5 text-left text-xs rounded border transition flex items-center justify-between ${
                         selectedVizType === meta.id
-                          ? "border-blue-600 bg-blue-50 text-blue-900 font-semibold ring-1 ring-blue-500"
+                          ? "border-blue-600 bg-blue-50/80 text-blue-900 font-semibold ring-1 ring-blue-500"
                           : "border-slate-200 text-slate-700 hover:bg-slate-50"
                       }`}
                     >
                       <span className="truncate">{meta.name}</span>
-                      <span className="text-[9px] text-slate-400 capitalize shrink-0 ml-1">
-                        {meta.category}
-                      </span>
+                      <span className="text-[9px] text-slate-400 capitalize shrink-0 ml-1">{meta.category}</span>
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* 3. X-Axis (Dimensions / Categories) */}
-              <div className="pt-3 border-t border-slate-100 space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
-                    X-Axis (Category / Dimension)
-                  </label>
-                  <span className="text-[10px] text-slate-400">
-                    {plugin?.controlPanel.dimensions.multi ? "Multi-select" : "Single"}
-                  </span>
-                </div>
-
-                {plugin?.controlPanel.dimensions.multi ? (
-                  <div className="space-y-1.5 max-h-36 overflow-y-auto border border-slate-200 p-2 rounded bg-slate-50/50">
+              {/* Time Dimension */}
+              <div className="pt-3 border-t border-slate-100 space-y-3">
+                <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                  Time Grain & Column
+                </label>
+                <div>
+                  <label className="block text-[11px] text-slate-600 mb-1">Time Column</label>
+                  <select
+                    value={timeColumn}
+                    onChange={(e) => setTimeColumn(e.target.value)}
+                    className="w-full px-2.5 py-1 text-xs border border-slate-300 rounded bg-white"
+                  >
+                    <option value="">None (Categorical)</option>
                     {currentColumns.map((c) => {
                       const colName = c.column_name || c.name;
                       return (
-                        <label
-                          key={colName}
-                          className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer hover:text-blue-600"
-                        >
+                        <option key={colName} value={colName}>
+                          {colName} ({c.data_type})
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                {timeColumn && (
+                  <div>
+                    <label className="block text-[11px] text-slate-600 mb-1">Time Grain</label>
+                    <select
+                      value={timeGrain}
+                      onChange={(e) => setTimeGrain(e.target.value)}
+                      className="w-full px-2.5 py-1 text-xs border border-slate-300 rounded bg-white"
+                    >
+                      <option value="day">Day</option>
+                      <option value="week">Week</option>
+                      <option value="month">Month</option>
+                      <option value="quarter">Quarter</option>
+                      <option value="year">Year</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {/* Dimensions */}
+              <div className="pt-3 border-t border-slate-100 space-y-2">
+                <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                  Dimensions (Group By)
+                </label>
+                {plugin?.controlPanel.dimensions.multi ? (
+                  <div className="space-y-1.5 max-h-36 overflow-y-auto border border-slate-200 p-2 rounded">
+                    {currentColumns.map((c) => {
+                      const colName = c.column_name || c.name;
+                      return (
+                        <label key={colName} className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
                           <input
                             type="checkbox"
                             checked={selectedDimensions.includes(colName)}
@@ -741,17 +657,11 @@ export const ChartsPage: React.FC = () => {
                               if (e.target.checked) {
                                 setSelectedDimensions([...selectedDimensions, colName]);
                               } else {
-                                setSelectedDimensions(
-                                  selectedDimensions.filter((dim) => dim !== colName)
-                                );
+                                setSelectedDimensions(selectedDimensions.filter((dim) => dim !== colName));
                               }
                             }}
-                            className="rounded text-blue-600 focus:ring-blue-500"
                           />
                           <span className="font-mono text-[11px]">{colName}</span>
-                          <span className="text-[10px] text-slate-400 ml-auto">
-                            {c.data_type}
-                          </span>
                         </label>
                       );
                     })}
@@ -759,13 +669,10 @@ export const ChartsPage: React.FC = () => {
                 ) : (
                   <select
                     value={selectedDimension}
-                    onChange={(e) => {
-                      setSelectedDimension(e.target.value);
-                      setSelectedDimensions(e.target.value ? [e.target.value] : []);
-                    }}
-                    className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded bg-white font-medium focus:ring-2 focus:ring-blue-500"
+                    onChange={(e) => setSelectedDimension(e.target.value)}
+                    className="w-full px-2.5 py-1 text-xs border border-slate-300 rounded bg-white"
                   >
-                    <option value="">-- Choose X-Axis Column --</option>
+                    <option value="">None</option>
                     {currentColumns.map((c) => {
                       const colName = c.column_name || c.name;
                       return (
@@ -778,283 +685,243 @@ export const ChartsPage: React.FC = () => {
                 )}
               </div>
 
-              {/* 4. Y-Axis (Metric & Aggregation) */}
+              {/* Metrics */}
               <div className="pt-3 border-t border-slate-100 space-y-2">
-                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
-                  Y-Axis (Metric & Aggregation)
+                <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                  Metrics
                 </label>
-
-                {/* Primary Metric Row */}
-                <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5 space-y-2">
-                  <div className="flex gap-1.5 items-center">
-                    {/* Aggregation Function Selector */}
-                    <select
-                      value={primaryMetricAgg}
-                      onChange={(e) => setPrimaryMetricAgg(e.target.value)}
-                      disabled={primaryMetricCol === "count"}
-                      className="w-24 px-1.5 py-1 text-xs border border-slate-300 rounded bg-white font-mono font-semibold text-blue-800 disabled:opacity-50"
-                    >
-                      <option value="SUM">SUM</option>
-                      <option value="AVG">AVG</option>
-                      <option value="MIN">MIN</option>
-                      <option value="MAX">MAX</option>
-                      <option value="COUNT">COUNT</option>
-                      <option value="COUNT_DISTINCT">DIST</option>
-                    </select>
-
-                    {/* Column Selector */}
-                    <select
-                      value={primaryMetricCol}
-                      onChange={(e) => setPrimaryMetricCol(e.target.value)}
-                      className="flex-1 min-w-0 px-2 py-1 text-xs border border-slate-300 rounded bg-white font-medium text-slate-800"
-                    >
-                      <option value="count">Count of Rows (COUNT(*))</option>
-                      {numericColumns.length > 0 && (
-                        <optgroup label="Numeric Measures">
-                          {numericColumns.map((c) => {
-                            const colName = c.column_name || c.name;
-                            return (
-                              <option key={colName} value={colName}>
-                                {colName} ({c.data_type})
-                              </option>
-                            );
-                          })}
-                        </optgroup>
-                      )}
-                      {currentColumns
-                        .filter((c) => !isNumericColumn(c))
-                        .map((c) => {
-                          const colName = c.column_name || c.name;
-                          return (
-                            <option key={colName} value={colName}>
-                              {colName} ({c.data_type})
-                            </option>
+                <div className="space-y-1.5 border border-slate-200 p-2 rounded max-h-40 overflow-y-auto">
+                  {/* Default Row Count Metric */}
+                  <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedMetrics.some((sm) => sm.name === "count" || sm.expression === "COUNT(*)")}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedMetrics([
+                            ...selectedMetrics,
+                            { name: "count", label: "Count of Rows", expression: "COUNT(*)" },
+                          ]);
+                        } else {
+                          setSelectedMetrics(
+                            selectedMetrics.filter((sm) => sm.name !== "count" && sm.expression !== "COUNT(*)")
                           );
-                        })}
-                    </select>
-                  </div>
+                        }
+                      }}
+                    />
+                    <span className="font-semibold text-blue-900">Row Count (COUNT(*))</span>
+                  </label>
 
-                  <div className="text-[11px] text-slate-500 font-mono bg-white px-2 py-1 rounded border border-slate-200 flex items-center justify-between">
-                    <span className="text-slate-400">SQL Expression:</span>
-                    <span className="font-semibold text-blue-600 truncate ml-2">
-                      {primaryMetricCol === "count"
-                        ? "COUNT(*)"
-                        : `${primaryMetricAgg}("${primaryMetricCol}")`}
-                    </span>
-                  </div>
-                </div>
+                  {currentMetrics.map((m) => {
+                    const mName = m.metric_name || m.name;
+                    const isSelected = selectedMetrics.some((sm) => sm.name === mName);
+                    return (
+                      <label key={mName} className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedMetrics([
+                                ...selectedMetrics,
+                                {
+                                  name: mName,
+                                  label: m.verbose_name || mName,
+                                  expression: m.sql_expression,
+                                },
+                              ]);
+                            } else {
+                              setSelectedMetrics(selectedMetrics.filter((sm) => sm.name !== mName));
+                            }
+                          }}
+                        />
+                        <span className="font-semibold text-blue-900">{m.verbose_name || mName}</span>
+                      </label>
+                    );
+                  })}
 
-                {/* Additional Metrics for Multi-Series Visualizations */}
-                {additionalMetrics.length > 0 && (
-                  <div className="space-y-1 pt-1">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                      Additional Series:
-                    </div>
-                    {additionalMetrics.map((sm, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-center justify-between text-xs bg-blue-50 text-blue-900 px-2 py-1 rounded font-mono"
-                      >
+                  {/* Ad-hoc Metrics added in this session */}
+                  {selectedMetrics
+                    .filter(
+                      (sm) =>
+                        sm.name !== "count" &&
+                        sm.expression !== "COUNT(*)" &&
+                        !currentMetrics.some((m) => (m.metric_name || m.name) === sm.name)
+                    )
+                    .map((sm) => (
+                      <div key={sm.name} className="flex items-center justify-between text-xs bg-blue-50 text-blue-900 px-2 py-1 rounded font-mono">
                         <span className="truncate">{sm.label || sm.expression}</span>
                         <button
                           type="button"
-                          onClick={() =>
-                            setAdditionalMetrics(additionalMetrics.filter((_, i) => i !== idx))
-                          }
+                          onClick={() => setSelectedMetrics(selectedMetrics.filter((x) => x.name !== sm.name))}
                           className="text-blue-400 hover:text-red-600 ml-1"
                         >
                           ✕
                         </button>
                       </div>
                     ))}
-                  </div>
-                )}
-              </div>
-
-              {/* 5. Temporal Axis & Time Grain (Strictly Validated for DATE / TIMESTAMP) */}
-              <div className="pt-3 border-t border-slate-100 space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
-                    Time Column & Grain
-                  </label>
-                  {validTimeColumns.length === 0 && (
-                    <span className="text-[10px] text-amber-600 font-medium">None in schema</span>
-                  )}
                 </div>
 
-                {validTimeColumns.length > 0 ? (
-                  <div className="space-y-2">
-                    <select
-                      value={timeColumn}
-                      onChange={(e) => setTimeColumn(e.target.value)}
-                      className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded bg-white font-medium"
-                    >
-                      <option value="">None (Categorical X-Axis)</option>
-                      {validTimeColumns.map((c) => {
-                        const colName = c.column_name || c.name;
-                        return (
-                          <option key={colName} value={colName}>
-                            {colName} ({c.data_type})
-                          </option>
-                        );
-                      })}
-                    </select>
-
-                    {timeColumn && (
-                      <div className="flex items-center gap-2">
-                        <span className="text-[11px] text-slate-500 whitespace-nowrap">Grain:</span>
-                        <select
-                          value={timeGrain}
-                          onChange={(e) => setTimeGrain(e.target.value)}
-                          className="flex-1 px-2 py-1 text-xs border border-slate-300 rounded bg-white font-mono"
-                        >
-                          <option value="hour">Hour</option>
-                          <option value="day">Day</option>
-                          <option value="week">Week</option>
-                          <option value="month">Month</option>
-                          <option value="quarter">Quarter</option>
-                          <option value="year">Year</option>
-                        </select>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="p-2 rounded bg-slate-50 border border-slate-200 text-[11px] text-slate-500 italic">
-                    This dataset has no detected DATE or TIMESTAMP columns. Time-based date_trunc grouping is disabled.
-                  </div>
-                )}
+                {/* Quick Ad-hoc Aggregation Builder */}
+                <div className="flex gap-1 items-center">
+                  <select
+                    value={newMetricAgg}
+                    onChange={(e) => setNewMetricAgg(e.target.value)}
+                    className="w-20 px-1 py-1 text-[11px] border border-slate-300 rounded bg-white font-mono"
+                  >
+                    <option value="SUM">SUM</option>
+                    <option value="AVG">AVG</option>
+                    <option value="MIN">MIN</option>
+                    <option value="MAX">MAX</option>
+                    <option value="COUNT">COUNT</option>
+                    <option value="COUNT_DISTINCT">DIST</option>
+                  </select>
+                  <select
+                    value={newMetricCol}
+                    onChange={(e) => setNewMetricCol(e.target.value)}
+                    className="flex-1 min-w-0 px-1.5 py-1 text-[11px] border border-slate-300 rounded bg-white"
+                  >
+                    <option value="">+ Add Column Metric...</option>
+                    {currentColumns.map((c) => {
+                      const colName = c.column_name || c.name;
+                      return (
+                        <option key={colName} value={colName}>
+                          {colName}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={handleAddAdhocMetric}
+                    disabled={!newMetricCol}
+                    className="px-2 py-1 text-xs bg-slate-200 hover:bg-slate-300 rounded disabled:opacity-40"
+                    title="Add metric"
+                  >
+                    +
+                  </button>
+                </div>
               </div>
 
-              {/* 6. Ad-Hoc Filters */}
+              {/* Filters */}
               <div className="pt-3 border-t border-slate-100 space-y-2">
-                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
-                  Filters ({filters.length})
+                <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                  Ad-hoc Filters ({filters.length})
                 </label>
-
-                {filters.length > 0 && (
-                  <div className="space-y-1">
-                    {filters.map((f, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-center justify-between text-xs bg-slate-100 p-1.5 rounded font-mono"
+                <div className="space-y-1">
+                  {filters.map((f, idx) => (
+                    <div key={idx} className="flex items-center justify-between text-xs bg-slate-100 p-1.5 rounded font-mono">
+                      <span>
+                        {f.col} {f.op} {String(f.val)}
+                      </span>
+                      <button
+                        onClick={() => handleRemoveFilter(idx)}
+                        className="text-slate-400 hover:text-red-600 text-xs px-1"
                       >
-                        <span className="truncate">
-                          {f.col} {f.op} {String(f.val)}
-                        </span>
-                        <button
-                          onClick={() => handleRemoveFilter(idx)}
-                          className="text-slate-400 hover:text-red-600 text-xs px-1"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
 
-                <div className="space-y-1.5 pt-1">
+                <div className="space-y-1 pt-1">
                   <select
                     value={newFilterCol}
                     onChange={(e) => setNewFilterCol(e.target.value)}
                     className="w-full px-2 py-1 text-xs border border-slate-300 rounded bg-white"
                   >
-                    <option value="">+ Add Column Filter...</option>
+                    <option value="">Select column to filter...</option>
                     {currentColumns.map((c) => {
                       const colName = c.column_name || c.name;
                       return (
                         <option key={colName} value={colName}>
-                          {colName} ({c.data_type})
+                          {colName}
                         </option>
                       );
                     })}
                   </select>
-
-                  {newFilterCol && (
-                    <div className="flex gap-1">
-                      <select
-                        value={newFilterOp}
-                        onChange={(e) => setNewFilterOp(e.target.value)}
-                        className="w-16 px-1 py-1 text-xs border border-slate-300 rounded bg-white font-mono"
-                      >
-                        <option value="==">=</option>
-                        <option value="!=">!=</option>
-                        <option value=">">&gt;</option>
-                        <option value=">=">&gt;=</option>
-                        <option value="<">&lt;</option>
-                        <option value="<=">&lt;=</option>
-                        <option value="LIKE">LIKE</option>
-                      </select>
-                      <input
-                        type="text"
-                        placeholder="Filter value..."
-                        value={newFilterVal}
-                        onChange={(e) => setNewFilterVal(e.target.value)}
-                        className="flex-1 px-2 py-1 text-xs border border-slate-300 rounded"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleAddFilter}
-                        className="px-2.5 py-1 text-xs font-semibold bg-blue-600 text-white rounded hover:bg-blue-700"
-                      >
-                        Add
-                      </button>
-                    </div>
-                  )}
+                  <div className="flex gap-1">
+                    <select
+                      value={newFilterOp}
+                      onChange={(e) => setNewFilterOp(e.target.value)}
+                      className="w-20 px-1 py-1 text-xs border border-slate-300 rounded bg-white"
+                    >
+                      <option value="==">=</option>
+                      <option value="!=">!=</option>
+                      <option value=">">&gt;</option>
+                      <option value=">=">&gt;=</option>
+                      <option value="<">&lt;</option>
+                      <option value="<=">&lt;=</option>
+                      <option value="LIKE">LIKE</option>
+                    </select>
+                    <input
+                      type="text"
+                      placeholder="Value"
+                      value={newFilterVal}
+                      onChange={(e) => setNewFilterVal(e.target.value)}
+                      className="flex-1 px-2 py-1 text-xs border border-slate-300 rounded"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddFilter}
+                      disabled={!newFilterCol}
+                      className="px-2 py-1 text-xs bg-slate-200 hover:bg-slate-300 rounded disabled:opacity-40"
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              {/* 7. Chart Customization Options */}
+              {/* Chart Specific Options */}
               {plugin?.controlPanel.options && (
                 <div className="pt-3 border-t border-slate-100 space-y-2">
-                  <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                  <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
                     Chart Customization
                   </label>
-                  {Object.entries(plugin.controlPanel.options).map(
-                    ([optKey, optConfig]: [string, any]) => (
-                      <div key={optKey} className="text-xs">
-                        {optConfig.type === "boolean" && (
-                          <label className="flex items-center gap-2 cursor-pointer text-slate-700 hover:text-slate-900">
-                            <input
-                              type="checkbox"
-                              checked={chartOptions[optKey] ?? optConfig.default}
-                              onChange={(e) =>
-                                setChartOptions({ ...chartOptions, [optKey]: e.target.checked })
-                              }
-                              className="rounded text-blue-600 focus:ring-blue-500"
-                            />
-                            <span>{optConfig.label}</span>
+                  {Object.entries(plugin.controlPanel.options).map(([optKey, optConfig]: [string, any]) => (
+                    <div key={optKey} className="text-xs">
+                      {optConfig.type === "boolean" && (
+                        <label className="flex items-center gap-2 cursor-pointer text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={chartOptions[optKey] ?? optConfig.default}
+                            onChange={(e) =>
+                              setChartOptions({ ...chartOptions, [optKey]: e.target.checked })
+                            }
+                          />
+                          <span>{optConfig.label}</span>
+                        </label>
+                      )}
+                      {optConfig.type === "select" && (
+                        <div>
+                          <label className="block text-[11px] text-slate-600 mb-1">
+                            {optConfig.label}
                           </label>
-                        )}
-                        {optConfig.type === "select" && (
-                          <div>
-                            <label className="block text-[11px] text-slate-600 mb-1">
-                              {optConfig.label}
-                            </label>
-                            <select
-                              value={chartOptions[optKey] ?? optConfig.default}
-                              onChange={(e) =>
-                                setChartOptions({ ...chartOptions, [optKey]: e.target.value })
-                              }
-                              className="w-full px-2.5 py-1 text-xs border border-slate-300 rounded bg-white font-medium"
-                            >
-                              {optConfig.options.map((o: string) => (
-                                <option key={o} value={o}>
-                                  {o}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        )}
-                      </div>
-                    )
-                  )}
+                          <select
+                            value={chartOptions[optKey] ?? optConfig.default}
+                            onChange={(e) =>
+                              setChartOptions({ ...chartOptions, [optKey]: e.target.value })
+                            }
+                            className="w-full px-2.5 py-1 text-xs border border-slate-300 rounded bg-white"
+                          >
+                            {optConfig.options.map((o: string) => (
+                              <option key={o} value={o}>
+                                {o}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
 
-            {/* Right Canvas / Visualization Area */}
+            {/* Right Canvas / Work Area */}
             <div className="flex-1 flex flex-col overflow-hidden bg-white">
-              {/* Tab Navigation: Visualization / Data Preview / SQL */}
+              {/* Tabs: Chart / Data / SQL */}
               <div className="px-4 pt-2 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
                 <div className="flex gap-4">
                   <button
@@ -1085,7 +952,7 @@ export const ChartsPage: React.FC = () => {
                         : "border-transparent text-slate-500 hover:text-slate-800"
                     }`}
                   >
-                    Generated Dialect SQL
+                    Generated SQL
                   </button>
                 </div>
 
@@ -1097,39 +964,22 @@ export const ChartsPage: React.FC = () => {
                 )}
               </div>
 
-              {/* View Content Canvas */}
-              <div className="flex-1 overflow-auto p-4 flex flex-col justify-center relative">
-                {/* 1. Visualization Tab */}
+              {/* View Content */}
+              <div className="flex-1 overflow-auto p-4 flex flex-col justify-center">
                 {activeViewTab === "chart" && (
-                  <div className="h-full w-full flex flex-col justify-center relative">
-                    {/* Error Banner: When query fails, display error clearly without rendering stale charts */}
-                    {queryError && (
-                      <div className="m-4 p-4 bg-red-50 border border-red-200 rounded-xl text-xs text-red-800 flex items-start gap-3 shadow-sm">
-                        <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-                        <div className="space-y-1">
-                          <h4 className="font-bold text-red-900">Query Execution Error</h4>
-                          <p className="leading-relaxed">{queryError}</p>
+                  <div className="h-full w-full flex flex-col justify-center">
+                    {runQueryMutation.isError && (
+                      <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 flex items-start gap-2">
+                        <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                        <div>
+                          <span className="font-semibold">Query Execution Failed: </span>
+                          {(runQueryMutation.error as any)?.message || String(runQueryMutation.error)}
                         </div>
                       </div>
                     )}
-
-                    {/* Loading State: Prevents stale data from masquerading as fresh query result */}
-                    {runQueryMutation.isPending && (
-                      <div className="absolute inset-0 bg-white/80 backdrop-blur-xs z-20 flex flex-col items-center justify-center text-slate-600 text-xs">
-                        <RefreshCw className="w-8 h-8 text-blue-600 animate-spin mb-3" />
-                        <span className="font-semibold text-slate-800">
-                          Executing Query Against DuckDB...
-                        </span>
-                        <span className="text-slate-400 mt-1">Generating live visualization</span>
-                      </div>
-                    )}
-
-                    {/* Chart Render */}
-                    {!queryError && plugin && chartProps ? (
-                      <div className="h-full w-full">
-                        <plugin.Renderer {...chartProps} />
-                      </div>
-                    ) : !queryError ? (
+                    {plugin && chartProps ? (
+                      <plugin.Renderer {...chartProps} />
+                    ) : (
                       <div className="h-full flex flex-col items-center justify-center text-slate-500 text-xs py-16 px-4">
                         <div className="w-14 h-14 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 mb-4 border border-blue-100 shadow-sm">
                           <BarChart3 className="w-7 h-7" />
@@ -1138,20 +988,11 @@ export const ChartsPage: React.FC = () => {
                           Ready to Explore {currentDataset?.name || "Dataset"}
                         </h3>
                         <p className="text-slate-500 max-w-md text-center mb-6 leading-relaxed">
-                          Selected chart:{" "}
-                          <span className="font-semibold text-slate-700">
-                            {plugin?.metadata.name || selectedVizType}
-                          </span>
-                          .
-                          {selectedDimension && (
-                            <>
-                              {" "}
-                              Grouping by{" "}
-                              <span className="font-semibold text-blue-700 font-mono bg-blue-50 px-1.5 py-0.5 rounded">
-                                {selectedDimension}
-                              </span>
-                              .
-                            </>
+                          Selected chart: <span className="font-semibold text-slate-700">{plugin?.metadata.name || selectedVizType}</span>.
+                          {selectedDimension ? (
+                            <> Grouping by <span className="font-semibold text-blue-700 font-mono bg-blue-50 px-1.5 py-0.5 rounded">{selectedDimension}</span>.</>
+                          ) : (
+                            <> Please choose a Dimension (Group By) on the left sidebar.</>
                           )}
                         </p>
                         <button
@@ -1159,15 +1000,23 @@ export const ChartsPage: React.FC = () => {
                           disabled={runQueryMutation.isPending}
                           className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-lg shadow transition hover:shadow-md disabled:opacity-50"
                         >
-                          <Play className="w-4 h-4 fill-current" />
-                          Run Query & Generate Chart
+                          {runQueryMutation.isPending ? (
+                            <>
+                              <RefreshCw className="w-4 h-4 animate-spin" />
+                              Running Query...
+                            </>
+                          ) : (
+                            <>
+                              <Play className="w-4 h-4 fill-current" />
+                              Run Query & Generate Chart
+                            </>
+                          )}
                         </button>
                       </div>
-                    ) : null}
+                    )}
                   </div>
                 )}
 
-                {/* 2. Data Preview Tab */}
                 {activeViewTab === "data" && (
                   <div className="h-full overflow-auto border border-slate-200 rounded-lg">
                     {chartData && chartData.rows.length > 0 ? (
@@ -1185,10 +1034,7 @@ export const ChartsPage: React.FC = () => {
                           {chartData.rows.map((row, rIdx) => (
                             <tr key={rIdx} className="hover:bg-slate-50">
                               {row.map((val, cIdx) => (
-                                <td
-                                  key={cIdx}
-                                  className="px-3 py-1.5 whitespace-nowrap text-slate-800"
-                                >
+                                <td key={cIdx} className="px-3 py-1.5 whitespace-nowrap text-slate-800">
                                   {val !== null && val !== undefined ? String(val) : "null"}
                                 </td>
                               ))}
@@ -1198,13 +1044,12 @@ export const ChartsPage: React.FC = () => {
                       </table>
                     ) : (
                       <div className="p-8 text-center text-slate-400 text-xs">
-                        {queryError ? "Query failed. No records to display." : "No query results to display. Click 'Run Query'."}
+                        No query results to display. Click "Run Query".
                       </div>
                     )}
                   </div>
                 )}
 
-                {/* 3. SQL Tab */}
                 {activeViewTab === "sql" && (
                   <div className="h-full overflow-auto bg-slate-900 text-slate-100 p-4 rounded-lg font-mono text-xs">
                     {chartData?.sql ? (
@@ -1233,7 +1078,7 @@ export const ChartsPage: React.FC = () => {
                     type="text"
                     value={chartTitle}
                     onChange={(e) => setChartTitle(e.target.value)}
-                    placeholder="e.g. Salary Distribution by Department"
+                    placeholder="e.g. Regional Revenue Breakdown"
                     className="w-full px-3 py-1.5 text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
@@ -1317,5 +1162,4 @@ export const ChartsPage: React.FC = () => {
     </div>
   );
 };
-
 export default ChartsPage;
