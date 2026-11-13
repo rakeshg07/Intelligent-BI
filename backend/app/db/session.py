@@ -1,5 +1,5 @@
 """Database Session Management and Engine Creation."""
-from typing import AsyncGenerator
+from typing import Any, AsyncGenerator
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import (
 from app.core.config import settings
 
 # Engine configuration
-engine_kwargs = {
+engine_kwargs: dict[str, Any] = {
     "echo": settings.DEBUG,
     "future": True,
 }

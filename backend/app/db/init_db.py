@@ -45,11 +45,11 @@ async def init_system_data(session: AsyncSession) -> None:
     logger.info("Initializing system permissions and roles...")
 
     # 1. Seed Permissions
-    permission_map = {}
+    permission_map: dict[str, Permission] = {}
     for code, name, resource in CORE_PERMISSIONS:
-        stmt = select(Permission).where(Permission.code == code)
-        result = await session.execute(stmt)
-        perm = result.scalar_one_or_none()
+        perm_stmt = select(Permission).where(Permission.code == code)
+        perm_result = await session.execute(perm_stmt)
+        perm = perm_result.scalar_one_or_none()
         if not perm:
             perm = Permission(code=code, name=name, resource=resource)
             session.add(perm)
@@ -57,11 +57,11 @@ async def init_system_data(session: AsyncSession) -> None:
         permission_map[code] = perm
 
     # 2. Seed Roles
-    role_map = {}
+    role_map: dict[str, Role] = {}
     for name, desc, is_sys in SYSTEM_ROLES:
-        stmt = select(Role).where(Role.name == name)
-        result = await session.execute(stmt)
-        role = result.scalar_one_or_none()
+        role_stmt = select(Role).where(Role.name == name)
+        role_result = await session.execute(role_stmt)
+        role = role_result.scalar_one_or_none()
         if not role:
             role = Role(name=name, description=desc, is_system=is_sys)
             session.add(role)
@@ -71,15 +71,15 @@ async def init_system_data(session: AsyncSession) -> None:
     # 3. Associate Permissions to Roles
     # Admin gets all
     admin_role = role_map["Admin"]
-    for perm in permission_map.values():
+    for p_obj in permission_map.values():
         assoc = await session.execute(
             select(RolePermission).where(
                 RolePermission.role_id == admin_role.id,
-                RolePermission.permission_id == perm.id,
+                RolePermission.permission_id == p_obj.id,
             )
         )
         if not assoc.scalar_one_or_none():
-            session.add(RolePermission(role_id=admin_role.id, permission_id=perm.id))
+            session.add(RolePermission(role_id=admin_role.id, permission_id=p_obj.id))
 
     # Editor gets editing rights
     editor_role = role_map["Editor"]
@@ -89,44 +89,44 @@ async def init_system_data(session: AsyncSession) -> None:
         "sqllab:use", "uploads:use", "ai:use",
     ]
     for code in editor_perms:
-        if code in permission_map:
-            perm = permission_map[code]
+        perm_item = permission_map.get(code)
+        if perm_item:
             assoc = await session.execute(
                 select(RolePermission).where(
                     RolePermission.role_id == editor_role.id,
-                    RolePermission.permission_id == perm.id,
+                    RolePermission.permission_id == perm_item.id,
                 )
             )
             if not assoc.scalar_one_or_none():
-                session.add(RolePermission(role_id=editor_role.id, permission_id=perm.id))
+                session.add(RolePermission(role_id=editor_role.id, permission_id=perm_item.id))
 
     # Viewer gets read rights
     viewer_role = role_map["Viewer"]
     for code in ["charts:read", "dashboards:read"]:
-        if code in permission_map:
-            perm = permission_map[code]
+        viewer_perm = permission_map.get(code)
+        if viewer_perm:
             assoc = await session.execute(
                 select(RolePermission).where(
                     RolePermission.role_id == viewer_role.id,
-                    RolePermission.permission_id == perm.id,
+                    RolePermission.permission_id == viewer_perm.id,
                 )
             )
             if not assoc.scalar_one_or_none():
-                session.add(RolePermission(role_id=viewer_role.id, permission_id=perm.id))
+                session.add(RolePermission(role_id=viewer_role.id, permission_id=viewer_perm.id))
 
     # SQL Lab user
     sqllab_role = role_map["SQL Lab user"]
     for code in ["sqllab:use", "databases:read", "datasets:read"]:
-        if code in permission_map:
-            perm = permission_map[code]
+        sqllab_perm = permission_map.get(code)
+        if sqllab_perm:
             assoc = await session.execute(
                 select(RolePermission).where(
                     RolePermission.role_id == sqllab_role.id,
-                    RolePermission.permission_id == perm.id,
+                    RolePermission.permission_id == sqllab_perm.id,
                 )
             )
             if not assoc.scalar_one_or_none():
-                session.add(RolePermission(role_id=sqllab_role.id, permission_id=perm.id))
+                session.add(RolePermission(role_id=sqllab_role.id, permission_id=sqllab_perm.id))
 
     # 4. Seed Admin User
     admin_stmt = select(User).where(User.email == settings.ADMIN_EMAIL)

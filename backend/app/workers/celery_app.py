@@ -1,12 +1,15 @@
 """Celery Worker Application Setup."""
+from typing import Any, Optional
 try:
     from celery import Celery
     HAS_CELERY = True
 except ImportError:
-    Celery = None  # type: ignore
+    Celery = None
     HAS_CELERY = False
 
 from app.core.config import settings
+
+celery_app: Optional[Any] = None
 
 if HAS_CELERY and Celery is not None:
     celery_app = Celery(
@@ -25,10 +28,8 @@ if HAS_CELERY and Celery is not None:
         worker_prefetch_multiplier=1,
     )
 
-    @celery_app.task(name="health_check_task")
-    def health_check_task() -> dict:
+    @celery_app.task(name="health_check_task")  # type: ignore[untyped-decorator]
+    def health_check_task() -> dict[str, str]:
         """Simple ping task to verify worker health."""
         return {"status": "worker_online"}
-else:
-    celery_app = None  # type: ignore
 

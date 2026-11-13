@@ -2,7 +2,7 @@
 import hashlib
 import json
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 # In-memory LRU store: key -> (timestamp_expire, json_data)
 _MEMORY_CACHE: Dict[str, tuple[float, str]] = {}
@@ -36,7 +36,8 @@ class QueryResultCache:
             return None
 
         try:
-            return json.loads(serialized)
+            data = json.loads(serialized)
+            return cast(Dict[str, Any], data) if isinstance(data, dict) else None
         except Exception:
             return None
 

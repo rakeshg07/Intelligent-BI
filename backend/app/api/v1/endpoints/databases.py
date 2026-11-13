@@ -179,7 +179,7 @@ async def delete_database(
     id: uuid.UUID,
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_permission("databases:write")),
-) -> dict:
+) -> dict[str, str]:
     """Delete a database connection (system connections cannot be deleted)."""
     stmt = select(DatabaseConnection).where(
         DatabaseConnection.id == id,
@@ -247,7 +247,7 @@ async def get_database_columns(
     schema: Optional[str] = None,
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_permission("databases:read")),
-) -> List[dict]:
+) -> List[dict[str, Any]]:
     """Inspect columns and data types for a table."""
     stmt = select(DatabaseConnection).where(
         DatabaseConnection.id == id,

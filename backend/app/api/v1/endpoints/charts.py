@@ -263,7 +263,7 @@ async def get_chart_data(
     cache_key = generate_query_cache_key(sql, str(dataset.id))
     cached = QueryResultCache.get(cache_key)
     if cached:
-        return ChartDataResponse(**cached)
+        return ChartDataResponse.model_validate(cached)
 
     connector = get_connector(db_conn)
     query_res = connector.execute_query(sql, limit=payload.row_limit)
@@ -278,4 +278,11 @@ async def get_chart_data(
     }
     QueryResultCache.set(cache_key, resp_data, ttl_seconds=300)
 
-    return ChartDataResponse(**resp_data)
+    return ChartDataResponse(
+        columns=query_res.columns,
+        column_types=query_res.column_types,
+        rows=query_res.rows,
+        row_count=query_res.row_count,
+        sql=sql,
+        duration_ms=query_res.duration_ms,
+    )

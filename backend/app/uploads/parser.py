@@ -44,7 +44,7 @@ def parse_file_preview(
     content: bytes,
     filename: str,
     max_rows: int = 100,
-) -> Tuple[str, List[Dict[str, str]], List[List[Any]], int]:
+) -> Tuple[str, List[Dict[str, str]], List[Dict[str, Any]], int]:
     """Parse file preview and infer column types."""
     ext = filename.lower().split(".")[-1] if "." in filename else ""
 
@@ -94,9 +94,9 @@ def parse_file_preview(
         })
 
     # Prepare JSON serializable preview rows as dicts for UI table rendering
-    preview_rows = []
+    preview_rows: List[Dict[str, Any]] = []
     for _, row in df.head(max_rows).iterrows():
-        row_dict = {}
+        row_dict: Dict[str, Any] = {}
         for col in sanitized_columns:
             val = row[col]
             if pd.isna(val):

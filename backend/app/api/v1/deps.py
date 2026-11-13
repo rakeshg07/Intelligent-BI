@@ -1,6 +1,6 @@
 """FastAPI Dependency Injection Providers."""
 import uuid
-from typing import AsyncGenerator, Callable, List
+from typing import Any, AsyncGenerator, Callable, List
 from fastapi import Cookie, Depends, Header, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -90,7 +90,7 @@ async def get_current_active_user(
     return current_user
 
 
-def require_permission(permission_code: str) -> Callable[..., User]:
+def require_permission(permission_code: str) -> Callable[..., Any]:
     """Dependency factory checking if current user possesses permission or is superuser."""
 
     async def permission_checker(current_user: User = Depends(get_current_active_user)) -> User:

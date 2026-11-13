@@ -1,10 +1,10 @@
 """Main FastAPI Application Entrypoint."""
 import uuid
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
+from typing import Any, AsyncGenerator
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
 from app.api.v1.router import api_router
 from app.core.config import settings
@@ -18,10 +18,10 @@ from app.db.session import AsyncSessionLocal, async_engine
 class RequestContextMiddleware(BaseHTTPMiddleware):
     """Middleware attaching a unique request ID to each request."""
 
-    async def dispatch(self, request: Request, call_next: BaseHTTPMiddleware) -> Response:  # type: ignore[override]
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
         request.state.request_id = request_id
-        response = await call_next(request)  # type: ignore[misc]
+        response = await call_next(request)
         response.headers["X-Request-ID"] = request_id
         return response
 
@@ -82,7 +82,7 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 
 
 @app.get("/")
-async def root() -> dict:
+async def root() -> dict[str, Any]:
     """Root metadata endpoint."""
     return {
         "name": settings.PROJECT_NAME,

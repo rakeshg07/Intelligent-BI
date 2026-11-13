@@ -1,5 +1,5 @@
 """Authentication API Endpoints (Login, Logout, Me, Refresh)."""
-from typing import Any, List
+from typing import Any, List, Literal
 from fastapi import APIRouter, Cookie, Depends, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,7 +15,7 @@ from app.core.security import (
     verify_password,
 )
 from app.db.models import AuditLog, Role, User
-from app.schemas.auth import LoginRequest, TokenResponse, UserProfileOut
+from app.schemas.auth import LoginRequest, RoleOut, TokenResponse, UserProfileOut
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -56,24 +56,29 @@ async def login(
     refresh_token = create_refresh_token(token_data)
 
     # Set secure httpOnly cookies
-    cookie_kwargs = {
-        "httponly": True,
-        "secure": settings.COOKIE_SECURE,
-        "samesite": settings.COOKIE_SAMESITE,
-        "path": "/",
-    }
+    samesite_val: Literal["lax", "strict", "none"] = (
+        "strict" if settings.COOKIE_SAMESITE.lower() == "strict"
+        else "none" if settings.COOKIE_SAMESITE.lower() == "none"
+        else "lax"
+    )
 
     response.set_cookie(
         key="access_token",
         value=access_token,
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        **cookie_kwargs,
+        httponly=True,
+        secure=settings.COOKIE_SECURE,
+        samesite=samesite_val,
+        path="/",
     )
     response.set_cookie(
         key="refresh_token",
         value=refresh_token,
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400,
-        **cookie_kwargs,
+        httponly=True,
+        secure=settings.COOKIE_SECURE,
+        samesite=samesite_val,
+        path="/",
     )
 
     # Record login audit log
@@ -93,7 +98,7 @@ async def login(
         full_name=user.full_name,
         is_active=user.is_active,
         is_superuser=user.is_superuser,
-        roles=user.roles,
+        roles=[RoleOut.model_validate(r) for r in user.roles],
         permissions=_extract_user_permissions(user),
     )
 
@@ -123,7 +128,7 @@ async def get_my_profile(
         full_name=current_user.full_name,
         is_active=current_user.is_active,
         is_superuser=current_user.is_superuser,
-        roles=current_user.roles,
+        roles=[RoleOut.model_validate(r) for r in current_user.roles],
         permissions=_extract_user_permissions(current_user),
     )
 
@@ -152,13 +157,19 @@ async def refresh_token(
 
     new_access_token = create_access_token({"sub": str(user.id), "email": user.email})
 
+    samesite_val: Literal["lax", "strict", "none"] = (
+        "strict" if settings.COOKIE_SAMESITE.lower() == "strict"
+        else "none" if settings.COOKIE_SAMESITE.lower() == "none"
+        else "lax"
+    )
+
     response.set_cookie(
         key="access_token",
         value=new_access_token,
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         httponly=True,
         secure=settings.COOKIE_SECURE,
-        samesite=settings.COOKIE_SAMESITE,
+        samesite=samesite_val,
         path="/"
     )
 

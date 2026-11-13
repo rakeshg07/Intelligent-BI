@@ -6,9 +6,9 @@ from app.workers.celery_app import celery_app, HAS_CELERY
 
 if HAS_CELERY and celery_app:
 
-    @celery_app.task(bind=True, name="execute_async_query_task")
+    @celery_app.task(bind=True, name="execute_async_query_task")  # type: ignore[untyped-decorator]
     def execute_async_query_task(
-        self,
+        self: Any,
         sql: str,
         limit: int = 10000,
         timeout_seconds: int = 120,
@@ -26,9 +26,9 @@ if HAS_CELERY and celery_app:
             "truncated": query_res.truncated,
         }
 
-    @celery_app.task(bind=True, name="export_data_csv_task")
+    @celery_app.task(bind=True, name="export_data_csv_task")  # type: ignore[untyped-decorator]
     def export_data_csv_task(
-        self,
+        self: Any,
         sql: str,
         filename: str = "export.csv",
     ) -> Dict[str, Any]:
