@@ -89,3 +89,12 @@ async def test_api_ai_status(client: AsyncClient) -> None:
     data = res.json()
     assert "enabled" in data
     assert "provider" in data
+
+
+@pytest.mark.asyncio
+async def test_api_admin_audit_log(client: AsyncClient) -> None:
+    """Test retrieving system audit log as admin."""
+    headers = await get_admin_auth_headers(client)
+    res = await client.get("/api/v1/admin/audit-log", headers=headers)
+    assert res.status_code == 200
+    assert "data" in res.json()
