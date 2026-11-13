@@ -1,5 +1,5 @@
 """Tests for Security, Password Hashing, JWT, and Fernet Encryption."""
-import pytest
+
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -39,4 +39,3 @@ def test_fernet_credential_encryption() -> None:
     assert encrypted != raw_secret
     decrypted = decrypt_secret(encrypted)
     assert decrypted == raw_secret
-

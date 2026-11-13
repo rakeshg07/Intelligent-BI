@@ -12,7 +12,7 @@ from app.ai.guardrails.grounding import GroundingGuardrail
 from app.ai.orchestrator import AIOrchestrator
 from app.api.v1.deps import get_db_session, require_permission
 from app.core.config import settings
-from app.db.models import AIConversation, AIMessage, User
+from app.db.models import AIConversation, AIMessage, Dataset, User
 from app.schemas.ai import AIChatRequest, AIChatResponse, AIStatusResponse, AIVerifyRequest
 
 router = APIRouter(prefix="/ai", tags=["AI Assistant"])
@@ -49,6 +49,27 @@ async def chat_with_ai(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="AI Assistant is disabled. Enable AI_ENABLED=true in settings.",
         )
+
+    # Validate dataset authorization and existence if dataset_id provided
+    if payload.dataset_id:
+        if not current_user.is_superuser:
+            user_perms = {p.code for r in current_user.roles for p in r.permissions}
+            if "datasets:read" not in user_perms:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Missing required permission to access datasets: 'datasets:read'",
+                )
+
+        ds_stmt = select(Dataset).where(
+            Dataset.id == payload.dataset_id,
+            Dataset.deleted_at.is_(None),
+        )
+        ds_res = await session.execute(ds_stmt)
+        if not ds_res.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Dataset '{payload.dataset_id}' not found or deleted.",
+            )
 
     orchestrator = AIOrchestrator()
     result = await orchestrator.run(

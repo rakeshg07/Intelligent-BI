@@ -1,9 +1,12 @@
 """Tests for Connectors Layer (DuckDB and SQLite)."""
+
 import os
-import tempfile
-import pytest
-import duckdb
 import sqlite3
+import tempfile
+
+import duckdb
+import pytest
+
 from app.connectors.duckdb_connector import DuckDBConnector
 from app.connectors.sql_connector import SQLAlchemyConnector
 

@@ -1,6 +1,7 @@
 """Unit tests for Dashboard Schemas, Slug Generation, and Placement logic."""
+
 import uuid
-import pytest
+
 from app.api.v1.endpoints.dashboards import generate_slug
 from app.schemas.dashboard import DashboardCreate, DashboardFilterSchema, DashboardUpdate
 
@@ -45,4 +46,3 @@ def test_dashboard_update_and_filter_schema():
     assert update_payload.title == "Updated Dashboard Title"
     assert update_payload.is_published is True
     assert len(update_payload.filters) == 1
-

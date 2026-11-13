@@ -1,7 +1,9 @@
 """Tests for SQL Validation and AST Guardrails."""
+
 import pytest
+
 from app.core.errors import SQLGuardrailError
-from app.query.validator import validate_and_format_sql, sanitize_sql_comments
+from app.query.validator import sanitize_sql_comments, validate_and_format_sql
 
 
 def test_sanitize_comments():
@@ -61,4 +63,3 @@ def test_clamp_limit():
     sql = "SELECT id FROM large_table LIMIT 50000"
     formatted = validate_and_format_sql(sql, dialect="postgres", row_limit=5000)
     assert "LIMIT 5000" in formatted
-

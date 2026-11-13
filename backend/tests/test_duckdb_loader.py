@@ -1,10 +1,10 @@
 """Tests for File Parser and DuckDB Ingestion."""
+
 import io
-import os
-import tempfile
-import pytest
+
 import pandas as pd
-from app.uploads.parser import parse_file_preview, sanitize_column_name, infer_duckdb_type
+
+from app.uploads.parser import parse_file_preview, sanitize_column_name
 
 
 def test_sanitize_column_name():
@@ -29,7 +29,9 @@ def test_parse_csv_preview():
 
 
 def test_parse_json_lines_preview():
-    json_lines = b'{"id": 1, "product": "Chair", "stock": 10}\n{"id": 2, "product": "Desk", "stock": 5}\n'
+    json_lines = (
+        b'{"id": 1, "product": "Chair", "stock": 10}\n{"id": 2, "product": "Desk", "stock": 5}\n'
+    )
     fmt, cols, rows, count = parse_file_preview(json_lines, "inventory.jsonl")
 
     assert fmt == "json"
@@ -39,11 +41,7 @@ def test_parse_json_lines_preview():
 
 
 def test_parse_parquet_preview():
-    df = pd.DataFrame({
-        "metric_id": [101, 102],
-        "score": [98.5, 87.2],
-        "category": ["A", "B"]
-    })
+    df = pd.DataFrame({"metric_id": [101, 102], "score": [98.5, 87.2], "category": ["A", "B"]})
     buf = io.BytesIO()
     df.to_parquet(buf, index=False)
     parquet_bytes = buf.getvalue()

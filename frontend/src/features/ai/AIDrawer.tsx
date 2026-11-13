@@ -37,6 +37,9 @@ const SAMPLE_QUESTIONS = [
 
 const AI_CONVERSATION_STORAGE_KEY = "askyourdata_ai_conversation_id";
 
+const getStorageKey = (dsId?: string) =>
+  dsId ? `askyourdata_ai_conv_ds_${dsId}` : AI_CONVERSATION_STORAGE_KEY;
+
 export const AIDrawer: React.FC<{
   isOpen: boolean;
   onClose: () => void;
@@ -49,9 +52,12 @@ export const AIDrawer: React.FC<{
   datasetName,
 }) => {
   const navigate = useNavigate();
+  const activeStorageKey = getStorageKey(datasetId);
+  const prevDatasetIdRef = useRef<string | undefined>(datasetId);
+
   const [conversationId, setConversationId] = useState<string | undefined>(() => {
     try {
-      return sessionStorage.getItem(AI_CONVERSATION_STORAGE_KEY) || undefined;
+      return sessionStorage.getItem(activeStorageKey) || undefined;
     } catch {
       return undefined;
     }
@@ -62,6 +68,49 @@ export const AIDrawer: React.FC<{
   const [expandedData, setExpandedData] = useState<Record<string, boolean>>({});
   const [copiedSql, setCopiedSql] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Synchronize conversation state when datasetId changes
+  useEffect(() => {
+    if (prevDatasetIdRef.current !== datasetId) {
+      prevDatasetIdRef.current = datasetId;
+      let storedConvId: string | undefined;
+      try {
+        storedConvId = sessionStorage.getItem(getStorageKey(datasetId)) || undefined;
+      } catch {
+        // Ignore sessionStorage access restrictions
+      }
+      setConversationId(storedConvId);
+      setMessages([]);
+      setExpandedSql({});
+      setExpandedData({});
+      setInputPrompt("");
+
+      if (isOpen && storedConvId) {
+        api
+          .getAIConversationMessages(storedConvId)
+          .then((saved) => {
+            if (Array.isArray(saved) && saved.length > 0) {
+              setMessages(
+                saved.map((m: any) => ({
+                  id: m.id,
+                  role: m.role,
+                  content: m.content,
+                  timestamp: m.created_at ? new Date(m.created_at) : new Date(),
+                }))
+              );
+            }
+          })
+          .catch(() => {
+            setConversationId(undefined);
+            try {
+              sessionStorage.removeItem(getStorageKey(datasetId));
+            } catch {
+              // Ignore sessionStorage access restrictions
+            }
+          });
+      }
+    }
+  }, [datasetId, isOpen]);
 
   // Restore messages if conversationId was persisted across reload
   useEffect(() => {
@@ -83,18 +132,18 @@ export const AIDrawer: React.FC<{
         .catch(() => {
           setConversationId(undefined);
           try {
-            sessionStorage.removeItem(AI_CONVERSATION_STORAGE_KEY);
+            sessionStorage.removeItem(activeStorageKey);
           } catch {
             // Ignore sessionStorage access restrictions
           }
         });
     }
-  }, [isOpen, conversationId]);
+  }, [isOpen, conversationId, activeStorageKey, messages.length]);
 
   const handleNewChat = () => {
     setConversationId(undefined);
     try {
-      sessionStorage.removeItem(AI_CONVERSATION_STORAGE_KEY);
+      sessionStorage.removeItem(activeStorageKey);
     } catch {
       // Ignore sessionStorage access restrictions
     }
@@ -129,7 +178,7 @@ export const AIDrawer: React.FC<{
       if (response.conversation_id) {
         setConversationId(response.conversation_id);
         try {
-          sessionStorage.setItem(AI_CONVERSATION_STORAGE_KEY, response.conversation_id);
+          sessionStorage.setItem(activeStorageKey, response.conversation_id);
         } catch {
           // Ignore sessionStorage access restrictions
         }
@@ -183,6 +232,15 @@ export const AIDrawer: React.FC<{
     setTimeout(() => setCopiedSql(null), 2000);
   };
 
+  const samplePrompts = datasetName
+    ? [
+        `Summarize the columns, data types, and metrics in ${datasetName}`,
+        `What is the total row count and general overview of ${datasetName}?`,
+        `Show the top 5 records from ${datasetName}`,
+        `What are the most frequent categories or highest values in ${datasetName}?`,
+      ]
+    : SAMPLE_QUESTIONS;
+
   if (!isOpen) return null;
 
   return (
@@ -204,16 +262,25 @@ export const AIDrawer: React.FC<{
               <div>
                 <div className="flex items-center space-x-2">
                   <h2 className="text-base font-bold text-slate-900">
-                    Grounded AI Analyst
+                    {datasetName ? "Dataset AI Analyst" : "Grounded AI Analyst"}
                   </h2>
+                  {datasetName && (
+                    <span className="text-[10px] font-semibold tracking-wider uppercase px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1">
+                      <TableIcon className="w-3 h-3 text-blue-600" />
+                      Scoped
+                    </span>
+                  )}
                   <span className="text-[10px] font-semibold tracking-wider uppercase px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/60 flex items-center gap-1">
                     <ShieldCheck className="w-3 h-3 text-emerald-600" />
                     Zero Hallucination
                   </span>
                 </div>
                 {datasetName ? (
-                  <p className="text-xs text-blue-700 font-medium">
-                    Focused Dataset: <span className="underline font-semibold">{datasetName}</span>
+                  <p className="text-xs text-blue-700 font-medium flex items-center gap-1 mt-0.5">
+                    <span>Active Dataset:</span>
+                    <span className="font-semibold bg-blue-100/70 text-blue-900 px-1.5 py-0.5 rounded border border-blue-200/60">
+                      {datasetName}
+                    </span>
                   </p>
                 ) : (
                   <p className="text-xs text-slate-500">
@@ -243,6 +310,21 @@ export const AIDrawer: React.FC<{
               </button>
             </div>
           </div>
+
+          {/* Dataset Scope Active Banner */}
+          {datasetName && (
+            <div className="bg-blue-50/70 border-b border-blue-100 px-6 py-2.5 flex items-center justify-between text-xs text-blue-800">
+              <div className="flex items-center gap-2">
+                <TableIcon className="w-4 h-4 text-blue-600 shrink-0" />
+                <span>
+                  Context locked to <strong>{datasetName}</strong>. Queries and schema discovery are isolated to this dataset.
+                </span>
+              </div>
+              <span className="text-[10px] font-bold uppercase text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded border border-blue-200">
+                Isolated
+              </span>
+            </div>
+          )}
 
           {/* AI Disabled Alert Banner if AI_ENABLED=false */}
           {statusData && !statusData.enabled && (
@@ -274,16 +356,16 @@ export const AIDrawer: React.FC<{
                 {/* Sample Prompts */}
                 <div className="w-full max-w-md space-y-2 text-left">
                   <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 ml-1">
-                    Try asking:
+                    {datasetName ? `Explore ${datasetName}:` : "Try asking:"}
                   </p>
-                  {SAMPLE_QUESTIONS.map((q, idx) => (
+                  {samplePrompts.map((q, idx) => (
                     <button
                       key={idx}
                       onClick={() => handleSend(q)}
                       className="w-full text-left p-3 rounded-xl bg-slate-50 border border-slate-200 hover:border-blue-300 hover:bg-blue-50/50 text-xs font-medium text-slate-700 hover:text-blue-700 transition flex items-center justify-between group"
                     >
                       <span>{q}</span>
-                      <Sparkles className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-500" />
+                      <Sparkles className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-500 shrink-0 ml-2" />
                     </button>
                   ))}
                 </div>

@@ -84,6 +84,7 @@ async def tool_list_datasets_and_tables(
     session: AsyncSession,
     user: User,
     search: str | None = None,
+    scoped_dataset_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
     """Execute list_datasets_and_tables tool."""
     stmt = (
@@ -91,6 +92,9 @@ async def tool_list_datasets_and_tables(
         .options(selectinload(Dataset.columns), selectinload(Dataset.metrics))
         .where(Dataset.deleted_at.is_(None))
     )
+    if scoped_dataset_id:
+        stmt = stmt.where(Dataset.id == scoped_dataset_id)
+
     res = await session.execute(stmt)
     datasets = res.scalars().all()
 
@@ -114,9 +118,12 @@ async def tool_list_datasets_and_tables(
             }
         )
 
-    # Also check duckdb tables
-    duckdb_connector = DuckDBConnector()
-    raw_tables = duckdb_connector.get_tables()
+    # If scoped to a specific dataset, do not leak other raw DuckDB tables
+    if scoped_dataset_id:
+        raw_tables = [d.table_name for d in datasets if d.table_name]
+    else:
+        duckdb_connector = DuckDBConnector()
+        raw_tables = duckdb_connector.get_tables()
 
     return {
         "datasets": items,
@@ -129,8 +136,18 @@ async def tool_get_table_schema(
     session: AsyncSession,
     table_name: str,
     dataset_id: str | None = None,
+    allowed_table: str | None = None,
 ) -> dict[str, Any]:
-    """Execute get_table_schema tool."""
+    """Execute get_table_schema tool with optional dataset scoping."""
+    if allowed_table and table_name.strip().lower() != allowed_table.strip().lower():
+        return {
+            "found": False,
+            "error": (
+                f"Access restricted: Active dataset scope is restricted to table '{allowed_table}'. "
+                f"Table '{table_name}' cannot be accessed in this session."
+            ),
+        }
+
     # 1. First check if a registered Dataset exists for this table
     stmt = (
         select(Dataset)
@@ -183,7 +200,13 @@ async def tool_get_table_schema(
             ],
         }
 
-    # 2. Fall back to inspecting DuckDB table directly
+    # 2. Fall back to inspecting DuckDB table directly (only if not restricted by active scope)
+    if allowed_table and table_name.strip().lower() != allowed_table.strip().lower():
+        return {
+            "found": False,
+            "error": f"Access restricted: Table '{table_name}' is not authorized.",
+        }
+
     try:
         duckdb_connector = DuckDBConnector()
         cols = duckdb_connector.get_columns(table_name)
@@ -208,14 +231,16 @@ async def tool_execute_sql_query(
     sql: str,
     database_id: str | None = None,
     max_rows: int = 500,
+    allowed_tables: set[str] | None = None,
 ) -> dict[str, Any]:
-    """Execute execute_sql_query tool with full AST security guardrails."""
+    """Execute execute_sql_query tool with full AST security guardrails and optional table isolation."""
     # 1. Enforce AST security constraints
     try:
         validated_sql = AISQLGuard.validate_and_constrain(
             sql=sql,
             dialect="duckdb",
             max_rows=max_rows,
+            allowed_tables=allowed_tables,
         )
     except Exception as e:
         return {

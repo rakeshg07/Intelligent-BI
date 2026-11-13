@@ -1,4 +1,5 @@
 """Tests for Authentication Endpoints."""
+
 import pytest
 from httpx import AsyncClient
 
@@ -60,4 +61,3 @@ async def test_logout_endpoint(client: AsyncClient) -> None:
     response = await client.post("/api/v1/auth/logout")
     assert response.status_code == 200
     assert response.json()["message"] == "Successfully logged out"
-

@@ -1,5 +1,7 @@
 """Unit tests for AI SQL Security Guardrail."""
+
 import pytest
+
 from app.ai.guardrails.sql_guard import AISQLGuard
 from app.core.errors import ValidationError
 
@@ -48,4 +50,3 @@ def test_ai_sql_guard_allowed_tables():
             sql,
             allowed_tables={"global_sales", "customers"},
         )
-

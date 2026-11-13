@@ -169,8 +169,11 @@ class AIOrchestrator:
         session.add(user_message_record)
         await session.flush()
 
-        # 3. Contextual prompt enrichment if dataset_id provided
+        # 3. Contextual prompt enrichment and strict isolation if dataset_id provided
         context_hint = ""
+        scoped_table_name: str | None = None
+        allowed_tables: set[str] | None = None
+
         if dataset_id:
             ds_res = await session.execute(
                 select(Dataset)
@@ -179,13 +182,17 @@ class AIOrchestrator:
             )
             ds = ds_res.scalar_one_or_none()
             if ds:
+                scoped_table_name = ds.table_name
+                if ds.table_name:
+                    allowed_tables = {ds.table_name.lower()}
                 col_list = ", ".join([f"{c.name} ({c.data_type})" for c in (ds.columns or [])])
                 context_hint = (
                     f"\n\n### ACTIVE DATASET CONTEXT (STRICT SCOPE):\n"
                     f"- The user is specifically exploring dataset: '{ds.name}'\n"
                     f"- Target Table: '{ds.table_name}'\n"
                     f"- Columns: {col_list or 'Inspect with get_table_schema'}\n"
-                    f"- IMPORTANT: You MUST focus your analysis, queries, and answers ONLY on table '{ds.table_name}' unless the user explicitly asks about other tables."
+                    f"- MANDATORY REQUIREMENT: You MUST focus your analysis, queries, and answers ONLY on table '{ds.table_name}'. "
+                    f"You are strictly prohibited from inspecting or querying any other tables in this session."
                 )
 
         # 4. Initialize message context for LLM (system + prior turns + current prompt)
@@ -232,13 +239,16 @@ class AIOrchestrator:
                         session=session,
                         user=user,
                         search=tc.arguments.get("search"),
+                        scoped_dataset_id=dataset_id,
                     )
 
                 elif tc.name == "get_table_schema":
                     tool_output = await tool_get_table_schema(
                         session=session,
                         table_name=tc.arguments.get("table_name", ""),
-                        dataset_id=tc.arguments.get("dataset_id"),
+                        dataset_id=tc.arguments.get("dataset_id")
+                        or (str(dataset_id) if dataset_id else None),
+                        allowed_table=scoped_table_name,
                     )
 
                 elif tc.name == "execute_sql_query":
@@ -247,6 +257,7 @@ class AIOrchestrator:
                         session=session,
                         sql=sql,
                         database_id=str(database_id) if database_id else None,
+                        allowed_tables=allowed_tables,
                     )
                     success = tool_output.get("success", False)
 

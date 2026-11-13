@@ -1,4 +1,5 @@
 """Tests for Health Check Endpoints."""
+
 import pytest
 from httpx import AsyncClient
 
@@ -21,4 +22,3 @@ async def test_health_ready(client: AsyncClient) -> None:
     data = response.json()
     assert "status" in data
     assert "checks" in data
-

@@ -1,4 +1,5 @@
 """Tests for Jinja SQL Templating."""
+
 from app.query.jinja import render_template_sql
 
 

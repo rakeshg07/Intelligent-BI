@@ -1,19 +1,20 @@
 """Pytest test configuration and fixtures."""
+
 import os
 import tempfile
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
+
 import duckdb
-import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
+from app.api.v1.deps import get_db_session
 from app.core.config import settings
 from app.db.base import Base
 from app.db.init_db import init_system_data
 from app.main import app
-from app.api.v1.deps import get_db_session
 
 # Set testing environment so lifespan does not attempt connection to default postgres
 settings.ENVIRONMENT = "testing"
@@ -81,6 +82,7 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
 @pytest_asyncio.fixture(scope="function")
 async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     """Async HTTP test client with overridden database dependency."""
+
     async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
         yield db_session
 

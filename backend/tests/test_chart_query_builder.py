@@ -1,6 +1,9 @@
 """Unit tests for Chart Query Builder."""
+
 import uuid
+
 import pytest
+
 from app.db.models import Dataset
 from app.query.chart_query_builder import build_chart_sql
 

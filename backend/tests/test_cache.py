@@ -1,5 +1,5 @@
 """Unit tests for Query Result Cache."""
-import time
+
 from app.query.cache import QueryResultCache, generate_query_cache_key
 
 
@@ -38,4 +38,3 @@ def test_query_cache_expiry():
     # Set 0s TTL (already expired)
     QueryResultCache.set(key, data, ttl_seconds=-1)
     assert QueryResultCache.get(key) is None
-

@@ -1139,14 +1139,21 @@ export const ChartsPage: React.FC = () => {
           {/* Floating AI Button at bottom-right dedicated to the open dataset */}
           <div className="fixed bottom-6 right-6 z-40 flex items-center">
             <button
+              type="button"
+              data-testid="chart-explore-ai-fab"
               onClick={() => setIsDatasetAIDrawerOpen(true)}
-              className="group relative flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-full shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200 ring-4 ring-blue-500/20"
+              className="group relative flex items-center gap-2.5 px-4 py-3 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:via-indigo-700 hover:to-blue-800 text-white rounded-full shadow-lg hover:shadow-2xl hover:scale-105 active:scale-95 transition-all duration-200 ring-4 ring-blue-500/25 focus:outline-none focus:ring-4 focus:ring-blue-400"
               title={`Ask AI about ${currentDataset?.name || "this dataset"}`}
             >
               <Sparkles className="w-5 h-5 animate-pulse text-amber-300" />
-              <span className="text-xs font-bold tracking-wide">
-                Ask AI: {currentDataset?.name ? currentDataset.name.slice(0, 20) : "Dataset"}
-              </span>
+              <div className="flex flex-col text-left">
+                <span className="text-[10px] font-semibold text-blue-200 uppercase tracking-wider leading-none">
+                  Dataset AI
+                </span>
+                <span className="text-xs font-bold tracking-tight text-white leading-tight">
+                  {currentDataset?.name ? currentDataset.name.slice(0, 22) : "Explore Dataset"}
+                </span>
+              </div>
             </button>
           </div>
 

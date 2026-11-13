@@ -1,10 +1,12 @@
 """Unit tests for Grounding & Anti-Hallucination Guardrail (ADR-004 & Phase 4)."""
-import pytest
+
 from app.ai.guardrails.grounding import GroundingGuardrail, extract_numbers_from_text
 
 
 def test_extract_numbers_from_text():
-    sample_text = "Total revenue was $1,250,500.50 with a profit margin of 24.5%. Total orders: 450."
+    sample_text = (
+        "Total revenue was $1,250,500.50 with a profit margin of 24.5%. Total orders: 450."
+    )
     extracted = extract_numbers_from_text(sample_text)
     tokens = [t[0] for t in extracted]
     vals = [t[1] for t in extracted]
@@ -74,4 +76,3 @@ def test_grounding_percentage_and_count_matches():
 
     assert result.is_grounded is True
     assert len(result.unmatched_figures) == 0
-
