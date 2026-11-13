@@ -84,7 +84,9 @@ export const AIDrawer: React.FC<{
           setConversationId(undefined);
           try {
             sessionStorage.removeItem(AI_CONVERSATION_STORAGE_KEY);
-          } catch {}
+          } catch {
+            // Ignore sessionStorage access restrictions
+          }
         });
     }
   }, [isOpen, conversationId]);
@@ -93,7 +95,9 @@ export const AIDrawer: React.FC<{
     setConversationId(undefined);
     try {
       sessionStorage.removeItem(AI_CONVERSATION_STORAGE_KEY);
-    } catch {}
+    } catch {
+      // Ignore sessionStorage access restrictions
+    }
     setMessages([]);
     setExpandedSql({});
     setExpandedData({});
@@ -126,7 +130,9 @@ export const AIDrawer: React.FC<{
         setConversationId(response.conversation_id);
         try {
           sessionStorage.setItem(AI_CONVERSATION_STORAGE_KEY, response.conversation_id);
-        } catch {}
+        } catch {
+          // Ignore sessionStorage access restrictions
+        }
       }
       setMessages((prev) => [
         ...prev,
